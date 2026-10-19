@@ -1,3 +1,4 @@
+// @ts-check
 const { normalizeHttpUrl, matchesUrlHashes } = require("../url_identity");
 
 const DIRECT_DOWNLOAD_RULES = Object.freeze({

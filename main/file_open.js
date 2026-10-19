@@ -1,3 +1,4 @@
+// @ts-check
 function normalizeOpenPathResult(result) {
   if (typeof result !== "string") {
     return { ok: true };

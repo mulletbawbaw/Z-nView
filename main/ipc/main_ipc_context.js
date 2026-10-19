@@ -1,3 +1,4 @@
+// @ts-check
 function buildMainIpcContext(deps) {
   return {
     ipcMain: deps.ipcMain,

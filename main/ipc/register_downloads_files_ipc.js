@@ -1,3 +1,4 @@
+// @ts-check
 const { ENABLE_STARTUP_PERF_LOGGING } = require("../../shared/dev_mode");
 
 function registerDownloadsFilesIpcHandlers(context) {

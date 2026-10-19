@@ -1,3 +1,4 @@
+// @ts-check
 const { resolveSourceAdapter } = require("../../preload/source_adapters/registry");
 const { matchesUrlRules } = require("../../renderer/browser/url_rule_matcher");
 const { canGoBack, canGoForward } = require("../navigation_history_compat");

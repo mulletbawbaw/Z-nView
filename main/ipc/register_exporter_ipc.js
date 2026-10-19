@@ -1,3 +1,4 @@
+// @ts-check
 function registerExporterIpcHandlers(context) {
   const {
     ipcMain, dialog, getExporterWin, getGalleryWin, getBrowserWin, getDownloaderWin, fs, path, LIBRARY_ROOT, buildSelectedEntries, listLibraryEntriesForExport, estimateExportBytes, mapExportResult, exportSingleManga, validateWritableDirectory, isDirectoryEmpty, ensureDirs, vaultManager

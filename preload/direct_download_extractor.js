@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {Object} DirectDownloadMetadata
  * @property {string} sourceUrl

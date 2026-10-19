@@ -1,3 +1,4 @@
+// @ts-check
 const { extractMetadata, extractGalleryId } = require("./metadata_extractor");
 const { extractPageImageUrls } = require("./page_list_extractor");
 const { DIRECT_DOWNLOAD_RULES, matchesEHentaiGalleryUrl } = require("./url_rules");

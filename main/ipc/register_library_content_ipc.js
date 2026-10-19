@@ -1,3 +1,4 @@
+// @ts-check
 const { INDEX_PAGE_META_VERSION, getImageMetadataFromBuffer, sanitizePageEntry, sanitizePageMark, sanitizePageName } = require("../page_metadata");
 
 function registerLibraryContentIpcHandlers(context) {

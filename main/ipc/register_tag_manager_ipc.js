@@ -1,3 +1,4 @@
+// @ts-check
 const { resolveTagManagerRollout } = require("../tag_manager_rollout");
 const { isTagManagerConsoleLoggingEnabled } = require("../../shared/dev_mode");
 const { createTagManagerService } = require("../tag_manager_service");

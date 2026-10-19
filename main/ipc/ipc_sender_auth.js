@@ -1,3 +1,4 @@
+// @ts-check
 const UNAUTHORIZED_IPC_RESPONSE = Object.freeze({ ok: false, error: "Unauthorized IPC caller" });
 
 function createIpcSenderAuthorizer(options = {}) {

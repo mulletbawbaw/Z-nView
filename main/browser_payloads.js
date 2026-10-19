@@ -1,3 +1,4 @@
+// @ts-check
 const MAX_DIRECT_IMAGE_URLS = 4000;
 const MAX_META_STRING_LEN = 300;
 const MAX_META_NAME_LEN = 120;

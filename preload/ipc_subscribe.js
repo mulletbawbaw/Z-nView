@@ -1,3 +1,4 @@
+// @ts-check
 function subscribeIpc(ipcRenderer, channel, callback, options = {}) {
   const { allowedChannels } = options;
 

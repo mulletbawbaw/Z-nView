@@ -1,3 +1,4 @@
+// @ts-check
 const registerUiIpcHandlers = require("./register_ui_ipc").registerUiIpcHandlers;
 const registerSettingsLibraryIpcHandlers = require("./register_settings_library_ipc").registerSettingsLibraryIpcHandlers;
 const registerVaultBrowserIpcHandlers = require("./register_vault_browser_ipc").registerVaultBrowserIpcHandlers;

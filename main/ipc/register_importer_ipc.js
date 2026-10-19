@@ -1,3 +1,4 @@
+// @ts-check
 function registerImporterIpcHandlers(context) {
   const {
     ipcMain, dialog, getImporterWin, getGalleryWin, getBrowserWin, getDownloaderWin, scanImportRoot, scanSingleManga, normalizeImportItemsPayload, importLibraryCandidates, sendToGallery, ensureDirs, vaultManager, fs, LIBRARY_ROOT, path, buildComicEntry, getVaultRelPath, movePlainDirectImagesToVault, normalizeGalleryId, writeLibraryIndexEntry

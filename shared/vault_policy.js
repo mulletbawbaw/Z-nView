@@ -1,3 +1,4 @@
+// @ts-check
 const MIN_VAULT_PASSPHRASE = 8;
 
 

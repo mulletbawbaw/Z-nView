@@ -1,3 +1,4 @@
+// @ts-check
 let nodeCrypto = null;
 try {
   // In Electron sandboxed preload contexts, built-in Node modules may be unavailable.

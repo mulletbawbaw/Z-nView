@@ -1,3 +1,4 @@
+// @ts-check
 const { ipcRenderer } = require("electron");
 const { ENABLE_DIRECT_DOWNLOAD_CMD_LOGGING } = require("../shared/dev_mode");
 const { resolveSourceAdapter } = require("./source_adapters/registry");

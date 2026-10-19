@@ -1,3 +1,4 @@
+// @ts-check
 const { MANGA_ID_RE } = require("../groups_store");
 
 function isPlainObject(value) {

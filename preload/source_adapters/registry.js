@@ -1,3 +1,4 @@
+// @ts-check
 const { matchesUrlHashes, normalizeHashList } = require("./url_identity");
 
 const ADAPTER_EXPORT_SUFFIX = "SourceAdapter";

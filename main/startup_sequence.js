@@ -1,3 +1,4 @@
+// @ts-check
 function runStartupSequence({
   settingsManager,
   applyConfiguredLibraryRoot,

@@ -1,3 +1,4 @@
+// @ts-check
 function toAbsoluteUrl(rawUrl, locationHref) {
   if (!rawUrl) return "";
   try {

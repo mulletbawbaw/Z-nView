@@ -1,3 +1,4 @@
+// @ts-check
 function createBookmarksStore({ vaultManager, bookmarksFile, bookmarksRelPath, fs }) {
   function loadBookmarksFromDisk() {
     const vaultStatus = vaultManager.vaultStatus();

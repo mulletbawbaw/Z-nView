@@ -1,3 +1,4 @@
+// @ts-check
 function readFlag(name, defaultValue) {
   const raw = process.env[name];
   if (raw == null || raw === "") return defaultValue;

@@ -1,3 +1,4 @@
+// @ts-check
 function textContent(el) {
   return el && el.textContent ? el.textContent.trim() : "";
 }

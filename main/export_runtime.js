@@ -1,3 +1,4 @@
+// @ts-check
 function createExportRuntime({
   fs,
   path,

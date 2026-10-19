@@ -1,3 +1,4 @@
+// @ts-check
 const { ENABLE_STARTUP_PERF_LOGGING } = require("../../shared/dev_mode");
 const { runOpsCheck } = require("../../scripts/secure-memory-ops-check");
 const { resolveTagManagerRollout } = require("../tag_manager_rollout");

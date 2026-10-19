@@ -1,3 +1,4 @@
+// @ts-check
 function normalizeRolloutStage(value) {
   const stage = String(value || "").trim().toLowerCase();
   if (["disabled", "internal", "beta", "stable"].includes(stage)) return stage;

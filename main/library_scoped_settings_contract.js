@@ -1,3 +1,4 @@
+// @ts-check
 const path = require("path");
 
 const LIBRARY_SCOPED_SETTINGS_FILENAME = ".settings.json.enc";

@@ -1,3 +1,4 @@
+// @ts-check
 const { contextBridge, ipcRenderer } = require("electron");
 const { buildGroupsBridge } = require("./groups_preload.js");
 const { subscribeIpc } = require("./ipc_subscribe.js");

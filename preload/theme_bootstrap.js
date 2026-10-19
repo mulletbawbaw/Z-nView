@@ -1,3 +1,4 @@
+// @ts-check
 function shouldUseDarkBootstrapTheme(locationSearch) {
   const params = new URLSearchParams(String(locationSearch || ""));
   return params.get("bootstrapTheme") === "dark";

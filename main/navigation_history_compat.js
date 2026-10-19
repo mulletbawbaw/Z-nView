@@ -1,3 +1,4 @@
+// @ts-check
 function getNavigationHistory(contents) {
   if (!contents) return null;
   const navigationHistory = contents.navigationHistory;

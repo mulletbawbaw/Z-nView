@@ -1,3 +1,4 @@
+// @ts-check
 const MAX_DIMENSION_PX = 100_000;
 const INDEX_PAGE_META_VERSION = 2;
 const PAGE_MARK_OPTIONS = Object.freeze([

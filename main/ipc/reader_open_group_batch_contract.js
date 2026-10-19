@@ -1,3 +1,4 @@
+// @ts-check
 const { MAX_READER_LAUNCH_SIZE } = require("../groups_store");
 
 const REQUEST_ALLOWED_KEYS = Object.freeze([

@@ -1,0 +1,17 @@
+{
+  // Incremental type-checking for the JS codebase. Files opt in with `// @ts-check`;
+  // nothing is emitted, the app still runs from the original .js sources.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["main.js", "main/**/*.js", "shared/**/*.js", "preload/**/*.js", "types/**/*.d.ts"]
+}
