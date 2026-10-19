@@ -1,0 +1,6 @@
+node_modules/
+preload-dist/
+native/build/
+dist/
+dist-smoke/
+coverage/

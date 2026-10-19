@@ -1,10 +1,14 @@
 {
   "name": "nView",
   "version": "3.2.0",
+  "description": "Local encrypted manga library, reader and downloader",
+  "author": "nview-app",
+  "homepage": "https://github.com/nview-app/nView",
   "main": "main.js",
   "scripts": {
     "start": "npm run build:preload && electron .",
     "build:win": "npm run build:preload && electron-builder --win",
+    "build:linux": "npm run build:preload && electron-builder --linux",
     "package:smoke": "electron-builder --dir -c.asar=false -c.directories.output=dist-smoke -c.win.signAndEditExecutable=false",
     "verify:packaged-artifacts": "node scripts/verify-packaged-artifacts.js dist-smoke",
     "test": "node --test",
@@ -15,12 +19,14 @@
     "rebuild-native": "node scripts/rebuild-native.js",
     "verify-native": "node scripts/verify-native-addon.js",
     "check:native": "npm run rebuild-native && npm run verify-native",
-    "secure-memory:ops-check": "node scripts/secure-memory-ops-check.js"
+    "secure-memory:ops-check": "node scripts/secure-memory-ops-check.js",
+    "typecheck": "tsc -p tsconfig.json"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "electron": "^30.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.9.3"
   },
   "build": {
     "appId": "com.nviewer.app",
@@ -42,6 +48,25 @@
     "win": {
       "icon": "favicon.ico"
     },
+    "linux": {
+      "target": [
+        "AppImage",
+        "pacman",
+        "dir"
+      ],
+      "icon": "logo/linux",
+      "category": "Graphics",
+      "executableName": "nview",
+      "synopsis": "Local encrypted manga library and reader",
+      "maintainer": "nview-app",
+      "desktop": {
+        "StartupWMClass": "nView",
+        "Keywords": "manga;reader;comic;"
+      },
+      "executableArgs": [
+        "--ozone-platform-hint=auto"
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -50,7 +75,29 @@
     },
     "asarUnpack": [
       "native/build/Release/*.node"
-    ]
+    ],
+    "pacman": {
+      "packageName": "nview",
+      "depends": [
+        "gtk3",
+        "nss",
+        "alsa-lib",
+        "at-spi2-core",
+        "libdrm",
+        "libxkbcommon",
+        "libxcomposite",
+        "libxdamage",
+        "libxrandr",
+        "mesa",
+        "libcups"
+      ]
+    }
   },
-  "overrides": {}
+  "overrides": {
+    "yauzl": "^3.2.0"
+  },
+  "allowScripts": {
+    "electron@30.5.1": true
+  },
+  "license": "Apache-2.0"
 }

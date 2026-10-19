@@ -66,7 +66,7 @@ In practical terms, this means:
 
 ### Required baseline
 
-- **Windows** (primary supported path for secure-memory-native flow)
+- **Windows** or **Linux** (see Linux notes below)
 - **Node.js LTS** (18+ recommended)
 - **npm** (bundled with Node.js)
 - **Visual Studio Build Tools** with C++ workload
@@ -79,6 +79,17 @@ npm -v
 ```
 
 If either command fails, install or repair Node.js first.
+
+---
+
+### Linux (Arch and others)
+
+- Node.js + npm, `base-devel` (gcc/make) and `python` for node-gyp.
+- npm 11+ blocks dependency install scripts by default; `package.json` already approves Electron's (`allowScripts`).
+- Build packages with `npm run build:linux` → `dist/nView-<version>.AppImage` and `dist/nView-<version>.pacman` (install with `sudo pacman -U dist/nView-*.pacman`).
+- The native addon uses `mlock` + `MADV_DONTDUMP` on Linux. If locking fails (e.g. `ulimit -l` too low) the app falls back to wipe-only.
+- The packaged desktop entry launches with `--ozone-platform-hint=auto` (native Wayland). For the AppImage or `npm start`, set `ELECTRON_OZONE_PLATFORM_HINT=auto` or pass the flag; `app.commandLine.appendSwitch` is too late for this.
+- Type-check opted-in files with `npm run typecheck`.
 
 ---
 

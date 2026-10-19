@@ -34,7 +34,7 @@ napi_value CreateBool(napi_env env, bool value) {
 
 napi_value IsSupported(napi_env env, napi_callback_info info) {
   (void)info;
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__linux__)
   return CreateBool(env, true);
 #else
   return CreateBool(env, false);

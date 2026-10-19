@@ -16,7 +16,13 @@
               "AdditionalOptions": ["/guard:cf"]
             }
           }
-        }, {
+        }],
+        ["OS=='linux'", {
+          "sources": [
+            "src/secure_memory_linux.cc"
+          ]
+        }],
+        ["OS!='win' and OS!='linux'", {
           "sources": [
             "src/secure_memory_noop.cc"
           ]

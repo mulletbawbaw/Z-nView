@@ -1,3 +1,4 @@
+// @ts-check
 const path = require("path");
 const { app } = require("electron");
 
@@ -22,7 +23,10 @@ const SETTINGS_FILE = () => path.join(app.getPath("userData"), "settings.json.en
 const BOOKMARKS_FILE = () => path.join(app.getPath("userData"), "bookmarks.enc");
 const GROUPS_FILE = () => path.join(app.getPath("userData"), "groups.json.enc");
 const TAG_MANAGER_FILE = () => path.join(app.getPath("userData"), "tag-manager.dat");
-const APP_ICON_PATH = path.join(__dirname, "..", "favicon.ico");
+const APP_ICON_PATH =
+  process.platform === "win32"
+    ? path.join(__dirname, "..", "favicon.ico")
+    : path.join(__dirname, "..", "logo", "logo-256x256.png");
 
 module.exports = {
   LIBRARY_ROOT,

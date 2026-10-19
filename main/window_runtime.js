@@ -1,3 +1,4 @@
+// @ts-check
 const { Readable } = require("stream");
 const { canGoBack, canGoForward } = require("./navigation_history_compat");
 const {
@@ -6,6 +7,39 @@ const {
   ENABLE_DIRECT_DOWNLOAD_CMD_LOGGING,
 } = require("../shared/dev_mode");
 const { resolveSourceAdapterForStartPage, getSourceAdapterById } = require("../preload/source_adapters/registry");
+
+// Maps an appfile:/appblob: URL back to an absolute file path. These schemes are registered as
+// "standard", so the first path segment is parsed as the (lowercased) host: a Windows drive letter
+// for "appblob:///C:/..." or the leading directory for "appblob:////home/...".
+/**
+ * @param {URL} u
+ * @param {{ libraryRoot?: string, platform?: NodeJS.Platform, pathApi?: import("path").PlatformPath }} [options]
+ * @returns {string}
+ */
+function resolveAppUrlFilePath(u, { libraryRoot, platform = process.platform, pathApi = require("path") } = {}) {
+  const host = String(u.host || "");
+  let pathname = decodeURIComponent(u.pathname || "");
+  while (pathname.startsWith("/")) pathname = pathname.slice(1);
+
+  if (platform === "win32") {
+    if (/^[a-zA-Z]$/.test(host)) {
+      const drive = host.toUpperCase();
+      pathname = `${drive}:/${pathname}`;
+    }
+    if (/^[a-zA-Z]\//.test(pathname)) {
+      pathname = pathname[0].toUpperCase() + ":/" + pathname.slice(2);
+    }
+    return pathApi.win32.resolve(pathApi.win32.normalize(pathname));
+  }
+
+  if (host) {
+    // Host parsing lowercases the segment; restore its real casing from the library root.
+    const rootHead = pathApi.posix.resolve(String(libraryRoot || "/")).split("/")[1] || "";
+    const head = rootHead.toLowerCase() === host.toLowerCase() ? rootHead : decodeURIComponent(host);
+    pathname = `${head}/${pathname}`;
+  }
+  return pathApi.posix.resolve(pathApi.posix.normalize(`/${pathname}`));
+}
 
 function createWindowRuntime(deps) {
   const {
@@ -173,22 +207,8 @@ function createWindowRuntime(deps) {
         try {
           const u = new URL(request.url);
 
-          let pathname = decodeURIComponent(u.pathname || "");
-          while (pathname.startsWith("/")) pathname = pathname.slice(1);
-
-          if (process.platform === "win32") {
-            const host = String(u.host || "");
-            if (/^[a-zA-Z]$/.test(host)) {
-              const drive = host.toUpperCase();
-              pathname = `${drive}:/${pathname}`;
-            }
-            if (/^[a-zA-Z]\//.test(pathname)) {
-              pathname = pathname[0].toUpperCase() + ":/" + pathname.slice(2);
-            }
-          }
-
-          const resolved = path.resolve(path.normalize(pathname));
           const libRoot = path.resolve(LIBRARY_ROOT());
+          const resolved = resolveAppUrlFilePath(u, { libraryRoot: libRoot });
 
           if (!isPathInsideDir(libRoot, resolved)) {
             console.warn("[appfile] blocked:", { resolved, libRoot, url: request.url });
@@ -253,22 +273,8 @@ function createWindowRuntime(deps) {
       void (async () => {
         try {
           const u = new URL(request.url);
-          let pathname = decodeURIComponent(u.pathname || "");
-          while (pathname.startsWith("/")) pathname = pathname.slice(1);
-
-          if (process.platform === "win32") {
-            const host = String(u.host || "");
-            if (/^[a-zA-Z]$/.test(host)) {
-              const drive = host.toUpperCase();
-              pathname = `${drive}:/${pathname}`;
-            }
-            if (/^[a-zA-Z]\//.test(pathname)) {
-              pathname = pathname[0].toUpperCase() + ":/" + pathname.slice(2);
-            }
-          }
-
-          const resolved = path.resolve(path.normalize(pathname));
           const libRoot = path.resolve(LIBRARY_ROOT());
+          const resolved = resolveAppUrlFilePath(u, { libraryRoot: libRoot });
 
           if (!isPathInsideDir(libRoot, resolved)) {
             console.warn("[appblob] blocked:", { resolved, libRoot, url: request.url });
@@ -929,4 +935,5 @@ function createWindowRuntime(deps) {
 
 module.exports = {
   createWindowRuntime,
+  resolveAppUrlFilePath,
 };
