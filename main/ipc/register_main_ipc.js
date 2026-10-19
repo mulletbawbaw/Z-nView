@@ -8,6 +8,7 @@ const registerExporterIpcHandlers = require("./register_exporter_ipc").registerE
 const registerLibraryContentIpcHandlers = require("./register_library_content_ipc").registerLibraryContentIpcHandlers;
 const registerGroupsIpcHandlers = require("./register_groups_ipc").registerGroupsIpcHandlers;
 const registerTagManagerIpcHandlers = require("./register_tag_manager_ipc").registerTagManagerIpcHandlers;
+const { registerShellIpcHandlers } = require("./register_shell_ipc");
 const { createIpcSenderAuthorizer } = require("./ipc_sender_auth");
 
 const UI_ROLES = Object.freeze(["gallery", "downloader", "importer", "exporter", "group-manager", "reader", "browser-ui"]);
@@ -127,6 +128,15 @@ const MODULE_CHANNEL_ALLOWED_ROLES = Object.freeze({
     "tagManager:resolveForMetadata": ["gallery", "reader", "importer"],
     "tagManager:recoverStore": ["gallery"],
   }),
+  shell: Object.freeze({
+    "shell:getState": ["shell"],
+    "shell:activateTab": ["shell"],
+    "shell:closeTab": ["shell"],
+    "shell:moveTab": ["shell"],
+    "shell:showTabMenu": ["shell"],
+    "shell:readerSessions": ["reader"],
+    "shell:closeReader": ["reader"],
+  }),
 });
 
 const UI_CONTEXT_KEYS = Object.freeze([
@@ -156,6 +166,9 @@ const GROUPS_CONTEXT_KEYS = Object.freeze([
 const TAG_MANAGER_CONTEXT_KEYS = Object.freeze([
   "ipcMain", "tagManagerStore", "auditLogger", "telemetryLogger", "settingsManager", "loadLibraryIndexCache",
 ]);
+const SHELL_CONTEXT_KEYS = Object.freeze([
+  "ipcMain", "tabShell",
+]);
 
 const MAIN_IPC_REQUIRED_CONTEXT_KEYS = Object.freeze(Array.from(new Set([
   ...UI_CONTEXT_KEYS,
@@ -167,6 +180,7 @@ const MAIN_IPC_REQUIRED_CONTEXT_KEYS = Object.freeze(Array.from(new Set([
   ...LIBRARY_CONTENT_CONTEXT_KEYS,
   ...GROUPS_CONTEXT_KEYS,
   ...TAG_MANAGER_CONTEXT_KEYS,
+  ...SHELL_CONTEXT_KEYS,
   "getWebContentsRole",
 ])));
 
@@ -209,6 +223,7 @@ function registerMainIpcHandlers(context) {
   registerLibraryContentIpcHandlers(buildModuleContext(context, LIBRARY_CONTENT_CONTEXT_KEYS, "library/content", MODULE_CHANNEL_ALLOWED_ROLES["library/content"], withAllowedRoles));
   registerGroupsIpcHandlers(buildModuleContext(context, GROUPS_CONTEXT_KEYS, "groups", MODULE_CHANNEL_ALLOWED_ROLES.groups, withAllowedRoles));
   registerTagManagerIpcHandlers(buildModuleContext(context, TAG_MANAGER_CONTEXT_KEYS, "tag-manager", MODULE_CHANNEL_ALLOWED_ROLES["tag-manager"], withAllowedRoles));
+  registerShellIpcHandlers(buildModuleContext(context, SHELL_CONTEXT_KEYS, "shell", MODULE_CHANNEL_ALLOWED_ROLES.shell, withAllowedRoles));
 }
 
 module.exports = {

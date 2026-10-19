@@ -11,7 +11,7 @@ function registerExporterIpcHandlers(context) {
 
 ipcMain.handle("exporter:chooseDestination", async (_e, options = {}) => {
   const targetWindow = getExporterWin() && !getExporterWin().isDestroyed() ? getExporterWin() : getGalleryWin();
-  const result = await dialog.showOpenDialog(targetWindow ?? null, {
+  const result = await dialog.showOpenDialog(targetWindow?.getOwnerWindow?.() ?? targetWindow ?? null, {
     properties: ["openDirectory", "createDirectory", "dontAddToRecent"],
     title: "Select export destination folder",
     defaultPath: String(options.defaultPath || "").trim() || undefined,

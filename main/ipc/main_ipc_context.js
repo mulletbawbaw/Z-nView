@@ -90,6 +90,7 @@ function buildMainIpcContext(deps) {
     auditLogger: deps.auditLogger,
     telemetryLogger: deps.telemetryLogger,
     getWebContentsRole: deps.getWebContentsRole,
+    tabShell: deps.tabShell,
   };
 }
 

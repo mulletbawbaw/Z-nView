@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self';
+               style-src 'self' 'unsafe-inline';">
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" />
+    <link rel="stylesheet" href="./shell.css" />
+    <script src="./bootstrap_theme.js"></script>
+    <title>nView</title>
+  </head>
+  <body>
+    <nav id="tabBar" aria-label="Open views">
+      <div id="tabList" role="tablist" aria-label="Open views"></div>
+      <button id="tabOverflow" class="tab-overflow" type="button" aria-label="All tabs" aria-haspopup="menu" hidden>⌄</button>
+    </nav>
+    <script src="../renderer/shell_renderer.js"></script>
+  </body>
+</html>

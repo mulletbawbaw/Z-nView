@@ -13,7 +13,7 @@ function registerImporterIpcHandlers(context) {
 ipcMain.handle("importer:chooseRoot", async (_e, mode = "root") => {
   const targetWindow = getImporterWin() && !getImporterWin().isDestroyed() ? getImporterWin() : getGalleryWin();
   const isSingleMode = mode === "single";
-  const result = await dialog.showOpenDialog(targetWindow ?? null, {
+  const result = await dialog.showOpenDialog(targetWindow?.getOwnerWindow?.() ?? targetWindow ?? null, {
     properties: ["openDirectory", "dontAddToRecent"],
     title: isSingleMode ? "Select single manga folder" : "Select library root folder",
   });

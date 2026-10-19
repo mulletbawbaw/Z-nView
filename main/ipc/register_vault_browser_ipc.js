@@ -243,7 +243,13 @@ ipcMain.handle("browser:setSidePanelWidth", async (_event, width) => {
   if (!getBrowserView() || !getBrowserWin()) return { ok: false, error: "Browser is not open." };
   const numericWidth = Number(width);
   setBrowserSidePanelWidth(Number.isFinite(numericWidth) ? Math.max(0, Math.round(numericWidth)) : 0);
-  const bounds = getBrowserWin().getContentBounds();
+  const browserWin = getBrowserWin();
+  // Tabbed surfaces lay the page view out relative to their own area.
+  if (typeof browserWin.relayout === "function") {
+    browserWin.relayout();
+    return { ok: true };
+  }
+  const bounds = browserWin.getContentBounds();
   const barHeight = 60;
   getBrowserView().setBounds({
     x: getBrowserSidePanelWidth(),

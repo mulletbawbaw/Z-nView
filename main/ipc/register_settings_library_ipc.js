@@ -91,7 +91,8 @@ function registerSettingsLibraryIpcHandlers(context) {
     const defaultPath = DEFAULT_LIBRARY_ROOT();
     const configuredPath = settingsManager.getSettings().libraryPath || "";
     const currentPath = payload.currentPath || configuredPath || defaultPath;
-    const dialogRes = await dialog.showOpenDialog(getGalleryWin() || getBrowserWin() || getDownloaderWin() || null, {
+    const dialogParent = getGalleryWin() || getBrowserWin() || getDownloaderWin() || null;
+    const dialogRes = await dialog.showOpenDialog(dialogParent?.getOwnerWindow?.() ?? dialogParent, {
       title: "Choose library folder",
       defaultPath: currentPath,
       properties: ["openDirectory", "createDirectory", "dontAddToRecent"],

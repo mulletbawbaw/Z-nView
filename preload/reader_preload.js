@@ -9,6 +9,7 @@ const SUBSCRIPTION_CHANNELS = new Set([
   "reader:openGroupBatch",
   "library:changed",
   "settings:updated",
+  "reader:shellCommand",
 ]);
 
 const readerApi = {
@@ -25,6 +26,10 @@ const readerApi = {
   showInFolder: (targetPath) => ipcRenderer.invoke("files:showInFolder", targetPath),
   syncOpenComics: (comicDirs) => ipcRenderer.invoke("ui:syncOpenComics", comicDirs),
   completeOpenGroupBatch: (payload) => ipcRenderer.invoke("ui:readerOpenGroupBatch:result", payload),
+  publishShellSessions: (payload) => ipcRenderer.invoke("shell:readerSessions", payload),
+  closeReaderTab: () => ipcRenderer.invoke("shell:closeReader"),
+  onShellCommand: (cb) =>
+    subscribeIpc(ipcRenderer, "reader:shellCommand", cb, { allowedChannels: SUBSCRIPTION_CHANNELS }),
   onOpenComic: (cb) =>
     subscribeIpc(ipcRenderer, "reader:openComic", cb, { allowedChannels: SUBSCRIPTION_CHANNELS }),
   onOpenComicsBatch: (cb) =>

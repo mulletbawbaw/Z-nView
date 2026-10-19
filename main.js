@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const {
   app,
   BrowserWindow,
-  BrowserView,
+  WebContentsView,
   ipcMain,
   Menu,
   session,
@@ -130,6 +130,11 @@ const DEFAULT_SETTINGS = {
       scrollVelocityPrefetchCutoff: 1.6,
     },
     widthScale: 1,
+    layoutMode: "vertical",
+    readingDirection: "ltr",
+    pageSpread: "single",
+    autoDirectionByLanguage: true,
+    comicOverrides: {},
   },
   groups: {
     railEnabled: true,
@@ -326,7 +331,13 @@ const settingsManager = createSettingsManager({
   defaultSettings: DEFAULT_SETTINGS,
   getWindows: () => {
     if (!windowRuntime) return [];
-    return [windowRuntime.getGalleryWin(), windowRuntime.getDownloaderWin(), windowRuntime.getReaderWin(), windowRuntime.getBrowserWin()];
+    return [
+      windowRuntime.getShellWindow(),
+      windowRuntime.getGalleryWin(),
+      windowRuntime.getDownloaderWin(),
+      windowRuntime.getReaderWin(),
+      windowRuntime.getBrowserWin(),
+    ];
   },
   vaultManager,
 });
@@ -467,7 +478,9 @@ function getInProgressDownloadCount() {
 }
 
 function emitDownloadCount() {
-  sendToGallery("dl:activeCount", { count: getInProgressDownloadCount() });
+  const count = getInProgressDownloadCount();
+  sendToGallery("dl:activeCount", { count });
+  windowRuntime?.tabShell?.getSurface("downloader")?.setBadge(count > 0 ? String(count) : "");
 }
 
 function normalizeGalleryIdInput(value) {
@@ -681,7 +694,7 @@ async function tryExtractComicMetadataFromWebContents(webContents) {
 windowRuntime = createWindowRuntime({
   app,
   BrowserWindow,
-  BrowserView,
+  WebContentsView,
   Menu,
   session,
   path,
@@ -837,6 +850,7 @@ const mainIpcContext = buildMainIpcContext({
   auditLogger: logSecurityAuditEvent,
   telemetryLogger: logTagManagerTelemetryEvent,
   getWebContentsRole,
+  tabShell: windowRuntime.tabShell,
 });
 registerMainIpcHandlers(mainIpcContext);
 

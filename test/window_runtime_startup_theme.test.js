@@ -8,15 +8,25 @@ function makeDeps({ darkMode }) {
   const createdOptions = [];
   const loadFileCalls = [];
 
+  let nextWebContentsId = 1;
+  const makeWebContents = () => ({
+    id: nextWebContentsId++,
+    on: () => {},
+    once: () => {},
+    send: () => {},
+    focus: () => {},
+    isDestroyed: () => false,
+    setWindowOpenHandler: () => {},
+    loadFile: (filePath, options) => {
+      loadFileCalls.push({ filePath, options });
+    },
+  });
+
   class FakeBrowserWindow {
     constructor(options) {
       createdOptions.push(options);
-      this.webContents = {
-        id: 1,
-        on: () => {},
-        once: () => {},
-        setWindowOpenHandler: () => {},
-      };
+      this.webContents = makeWebContents();
+      this.contentView = { addChildView: () => {}, removeChildView: () => {} };
     }
 
     loadFile(filePath, options) {
@@ -24,6 +34,21 @@ function makeDeps({ darkMode }) {
     }
     on() {}
     isDestroyed() { return false; }
+    isMinimized() { return false; }
+    restore() {}
+    show() {}
+    setTitle() {}
+    getContentSize() { return [1200, 900]; }
+  }
+
+  class FakeWebContentsView {
+    constructor(options) {
+      createdOptions.push(options);
+      this.webContents = makeWebContents();
+    }
+    setBackgroundColor(color) { this.backgroundColor = color; }
+    setVisible() {}
+    setBounds() {}
   }
 
   return {
@@ -32,7 +57,7 @@ function makeDeps({ darkMode }) {
     deps: {
       app: { quit: () => {} },
       BrowserWindow: FakeBrowserWindow,
-      BrowserView: class {},
+      WebContentsView: FakeWebContentsView,
       Menu: { buildFromTemplate: () => ({ popup: () => {} }) },
       session: { fromPartition: () => ({ protocol: { registerStreamProtocol: () => {} } }) },
       path,
@@ -65,6 +90,8 @@ test('gallery window uses dark background color when darkMode is enabled at star
 
   assert.equal(createdOptions[0].backgroundColor, '#1e1e1e');
   assert.equal(loadFileCalls[0].options?.query?.bootstrapTheme, 'dark');
+  const galleryLoad = loadFileCalls.find((call) => call.filePath.endsWith('index.html'));
+  assert.equal(galleryLoad?.options?.query?.bootstrapTheme, 'dark');
 });
 
 test('gallery window uses light background color when darkMode is disabled at startup', () => {
@@ -74,4 +101,6 @@ test('gallery window uses light background color when darkMode is disabled at st
 
   assert.equal(createdOptions[0].backgroundColor, '#ffffff');
   assert.equal(loadFileCalls[0].options?.query?.bootstrapTheme, 'light');
+  const galleryLoad = loadFileCalls.find((call) => call.filePath.endsWith('index.html'));
+  assert.equal(galleryLoad?.options?.query?.bootstrapTheme, 'light');
 });

@@ -15,6 +15,7 @@ const MODULE_SPECS = [
   ["register_library_content_ipc.js", "registerLibraryContentIpcHandlers", "library/content"],
   ["register_groups_ipc.js", "registerGroupsIpcHandlers", "groups"],
   ["register_tag_manager_ipc.js", "registerTagManagerIpcHandlers", "tag-manager"],
+  ["register_shell_ipc.js", "registerShellIpcHandlers", "shell"],
 ];
 
 function withStubbedRegisterModules(fn) {

@@ -7,6 +7,10 @@ const {
   ENABLE_DIRECT_DOWNLOAD_CMD_LOGGING,
 } = require("../shared/dev_mode");
 const { resolveSourceAdapterForStartPage, getSourceAdapterById } = require("../preload/source_adapters/registry");
+const { createTabShell } = require("./tab_shell");
+
+// Height of the web viewer toolbar (browser.html) above the embedded page view.
+const BROWSER_TOOLBAR_HEIGHT = 60;
 
 // Maps an appfile:/appblob: URL back to an absolute file path. These schemes are registered as
 // "standard", so the first path segment is parsed as the (lowercased) host: a Windows drive letter
@@ -45,7 +49,7 @@ function createWindowRuntime(deps) {
   const {
     app,
     BrowserWindow,
-    BrowserView,
+    WebContentsView,
     Menu,
     session,
     path,
@@ -129,6 +133,33 @@ function createWindowRuntime(deps) {
 
   function getWebContentsRole(webContentsId) {
     return webContentsRoles.get(Number(webContentsId)) || "unknown";
+  }
+
+  const tabShell = createTabShell({
+    BrowserWindow,
+    WebContentsView,
+    Menu,
+    path,
+    appRootDir,
+    APP_ICON_PATH,
+    preloadScriptPath,
+    getBootstrapTheme,
+    getBootstrapBackgroundColor,
+    assignWebContentsRole,
+    attachUiNavigationGuards,
+  });
+
+  /**
+   * Opens (or focuses) an app area as a tab of the main window.
+   * @param {string} id
+   * @param {{ title: string, role: string, preload: string, htmlFile: string, closable?: boolean, guardLabel?: string }} options
+   * @param {() => void} onClosed
+   */
+  function ensureAreaSurface(id, options, onClosed) {
+    const existing = tabShell.getSurface(id);
+    const surface = tabShell.ensureSurface({ id, partition: UI_PARTITION, ...options });
+    if (surface !== existing) surface.once("closed", onClosed);
+    return surface;
   }
 
   function resolveRealPath(p) {
@@ -359,38 +390,31 @@ function createWindowRuntime(deps) {
 
   function createGalleryWindow() {
     ensureDirs();
-    galleryWin = new BrowserWindow({
-      width: 1200,
-      height: 900,
-      title: "Gallery",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
+    const shellWin = tabShell.ensureShellWindow({
+      onClose: async (event) => {
+        if (allowAppClose) return;
+        const needsWarning = dl.hasInProgressDownloads();
+        if (!needsWarning) return;
+        event.preventDefault();
+        const okToClose = await confirmCloseWithActiveVaultDownloads(shellWin);
+        if (!okToClose) return;
+        allowAppClose = true;
+        await dl.cancelAllJobs();
+        app.quit();
+      },
+      onClosed: () => {
+        closeAuxWindows();
+        void clearSessionData(uiSession, "ui-session");
       },
     });
-    galleryWin.loadFile(path.join(appRootDir, "windows", "index.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(galleryWin.webContents, "gallery");
-    attachUiNavigationGuards(galleryWin, "gallery");
-    galleryWin.on("close", async (event) => {
-      if (allowAppClose) return;
-      const needsWarning = dl.hasInProgressDownloads();
-      if (!needsWarning) return;
-      event.preventDefault();
-      const okToClose = await confirmCloseWithActiveVaultDownloads(galleryWin);
-      if (!okToClose) return;
-      allowAppClose = true;
-      await dl.cancelAllJobs();
-      app.quit();
-    });
-    galleryWin.on("closed", () => {
-      closeAuxWindows();
-      void clearSessionData(uiSession, "ui-session");
+    galleryWin = ensureAreaSurface("gallery", {
+      title: "Library",
+      closable: false,
+      role: "gallery",
+      preload: preloadScriptPath("preload.js"),
+      htmlFile: "index.html",
+    }, () => {
+      galleryWin = null;
     });
   }
 
@@ -403,148 +427,59 @@ function createWindowRuntime(deps) {
   }
 
   function ensureDownloaderWindow() {
-    if (downloaderWin && !downloaderWin.isDestroyed()) {
-      downloaderWin.focus();
-      return;
-    }
-
-    downloaderWin = new BrowserWindow({
-      width: 900,
-      height: 700,
-      title: "Downloader",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("downloader_preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+    downloaderWin = ensureAreaSurface("downloader", {
+      title: "Downloads",
+      role: "downloader",
+      preload: preloadScriptPath("downloader_preload.js"),
+      htmlFile: "downloader.html",
+    }, () => {
+      downloaderWin = null;
     });
-
-    downloaderWin.loadFile(path.join(appRootDir, "windows", "downloader.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(downloaderWin.webContents, "downloader");
-    attachUiNavigationGuards(downloaderWin, "downloader");
-    downloaderWin.on("closed", () => (downloaderWin = null));
   }
 
   function ensureImporterWindow() {
-    if (importerWin && !importerWin.isDestroyed()) {
-      importerWin.focus();
-      return;
-    }
-
-    importerWin = new BrowserWindow({
-      width: 1100,
-      height: 760,
-      title: "Import manga",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("importer_preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+    importerWin = ensureAreaSurface("importer", {
+      title: "Import",
+      role: "importer",
+      preload: preloadScriptPath("importer_preload.js"),
+      htmlFile: "importer.html",
+    }, () => {
+      importerWin = null;
     });
-
-    importerWin.loadFile(path.join(appRootDir, "windows", "importer.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(importerWin.webContents, "importer");
-    attachUiNavigationGuards(importerWin, "importer");
-    importerWin.on("closed", () => (importerWin = null));
   }
 
   function ensureExporterWindow() {
-    if (exporterWin && !exporterWin.isDestroyed()) {
-      exporterWin.focus();
-      return;
-    }
-
-    exporterWin = new BrowserWindow({
-      width: 1100,
-      height: 760,
-      title: "Export manga",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("exporter_preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+    exporterWin = ensureAreaSurface("exporter", {
+      title: "Export",
+      role: "exporter",
+      preload: preloadScriptPath("exporter_preload.js"),
+      htmlFile: "exporter.html",
+    }, () => {
+      exporterWin = null;
     });
-
-    exporterWin.loadFile(path.join(appRootDir, "windows", "exporter.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(exporterWin.webContents, "exporter");
-    attachUiNavigationGuards(exporterWin, "exporter");
-    exporterWin.on("closed", () => (exporterWin = null));
   }
 
   function ensureGroupManagerWindow() {
-    if (groupManagerWin && !groupManagerWin.isDestroyed()) {
-      groupManagerWin.focus();
-      return;
-    }
-
-    groupManagerWin = new BrowserWindow({
-      width: 1180,
-      height: 780,
-      minWidth: 980,
-      minHeight: 680,
-      title: "Group manager",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("group_manager_preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+    groupManagerWin = ensureAreaSurface("group-manager", {
+      title: "Groups",
+      role: "group-manager",
+      preload: preloadScriptPath("group_manager_preload.js"),
+      htmlFile: "group_manager.html",
+    }, () => {
+      groupManagerWin = null;
     });
-
-    groupManagerWin.loadFile(path.join(appRootDir, "windows", "group_manager.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(groupManagerWin.webContents, "group-manager");
-    attachUiNavigationGuards(groupManagerWin, "group-manager");
-    groupManagerWin.on("closed", () => (groupManagerWin = null));
   }
 
-
   function ensureTagManagerWindow() {
-    if (tagManagerWin && !tagManagerWin.isDestroyed()) {
-      tagManagerWin.focus();
-      return;
-    }
-
-    tagManagerWin = new BrowserWindow({
-      width: 1240,
-      height: 820,
-      minWidth: 980,
-      minHeight: 700,
-      title: "Tag manager",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("tag_manager_preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+    tagManagerWin = ensureAreaSurface("tag-manager", {
+      title: "Tags",
+      role: "gallery",
+      guardLabel: "tag-manager",
+      preload: preloadScriptPath("tag_manager_preload.js"),
+      htmlFile: "tag_manager.html",
+    }, () => {
+      tagManagerWin = null;
     });
-
-    tagManagerWin.loadFile(path.join(appRootDir, "windows", "tag_manager.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(tagManagerWin.webContents, "gallery");
-    attachUiNavigationGuards(tagManagerWin, "tag-manager");
-    tagManagerWin.on("closed", () => (tagManagerWin = null));
   }
 
   function ensureBrowserWindow(initialUrl = "https://example.com") {
@@ -570,27 +505,17 @@ function createWindowRuntime(deps) {
     logDirectDownloadPreloadDiagnostic("browser-ui", browserUiPreloadPath);
     logDirectDownloadPreloadDiagnostic("browser-view", browserViewPreloadPath);
 
-    browserWin = new BrowserWindow({
-      width: 1200,
-      height: 800,
+    browserWin = tabShell.ensureSurface({
+      id: "browser",
       title: "Web Viewer",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: browserUiPreloadPath,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+      role: "browser-ui",
+      guardLabel: "browser",
+      preload: browserUiPreloadPath,
+      htmlFile: "browser.html",
+      partition: UI_PARTITION,
     });
 
-    browserWin.loadFile(path.join(appRootDir, "windows", "browser.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(browserWin.webContents, "browser-ui");
-    attachUiNavigationGuards(browserWin, "browser");
-
-    browserView = new BrowserView({
+    browserView = new WebContentsView({
       webPreferences: {
         preload: browserViewPreloadPath,
         contextIsolation: true,
@@ -600,6 +525,7 @@ function createWindowRuntime(deps) {
       },
     });
     assignWebContentsRole(browserView.webContents, "browser-view");
+    tabShell.bindShortcuts(browserView.webContents);
 
     const normalizeAllowListDomains = (value) => {
       const list = Array.isArray(value) ? value : [];
@@ -682,7 +608,7 @@ function createWindowRuntime(deps) {
       return isHostAllowed(parsed.hostname, domains);
     };
 
-    browserWin.setBrowserView(browserView);
+    browserWin.addChildView(browserView);
     browserView.webContents.setWindowOpenHandler(({ url }) => {
       const { blockPopups } = settingsManager.getSettings();
       if (blockPopups) {
@@ -704,22 +630,17 @@ function createWindowRuntime(deps) {
       return callback({});
     });
 
-    const layout = () => {
-      if (!browserWin || browserWin.isDestroyed() || !browserView) return;
-      const b = browserWin.getContentBounds();
-      const barHeight = 60;
+    // The page view sits below the viewer toolbar and to the right of the optional side panel.
+    browserWin.setLayoutHook((area) => {
+      if (!browserView || browserView.webContents.isDestroyed()) return;
       const sideWidth = Math.max(0, browserSidePanelWidth);
       browserView.setBounds({
-        x: sideWidth,
-        y: barHeight,
-        width: Math.max(0, b.width - sideWidth),
-        height: b.height - barHeight,
+        x: area.x + sideWidth,
+        y: area.y + BROWSER_TOOLBAR_HEIGHT,
+        width: Math.max(0, area.width - sideWidth),
+        height: Math.max(0, area.height - BROWSER_TOOLBAR_HEIGHT),
       });
-      browserView.setAutoResize({ width: true, height: true });
-    };
-
-    browserWin.on("resize", layout);
-    layout();
+    });
 
     const publishBrowserUrl = (url) => {
       if (!browserWin || browserWin.isDestroyed()) return;
@@ -784,7 +705,9 @@ function createWindowRuntime(deps) {
       }
     });
 
-    browserWin.on("app-command", (_event, command) => {
+    const shellWindow = tabShell.getShellWindow();
+    const handleBrowserAppCommand = (_event, command) => {
+      if (tabShell.getState().tabs.find((tab) => tab.active)?.id !== "browser") return;
       if (!browserView || browserView.webContents.isDestroyed()) return;
       const contents = browserView.webContents;
       if (command === "browser-backward" && canGoBack(contents)) {
@@ -794,7 +717,8 @@ function createWindowRuntime(deps) {
         browserView.webContents.goForward();
       }
       publishNavigationState();
-    });
+    };
+    shellWindow?.on("app-command", handleBrowserAppCommand);
 
     browserView.webContents.on("did-start-navigation", () => {
       publishNavigationState();
@@ -852,14 +776,15 @@ function createWindowRuntime(deps) {
         },
       ]);
 
-      menu.popup({ window: browserWin });
+      menu.popup({ window: tabShell.getShellWindow() || undefined });
     });
 
     browserView.webContents.loadURL(initialUrl).catch((err) => {
       if (ENABLE_BROWSER_CMD_LOGGING) console.warn("[browser] initial load failed", summarizeError(err));
     });
 
-    browserWin.on("closed", () => {
+    browserWin.once("closed", () => {
+      if (shellWindow && !shellWindow.isDestroyed()) shellWindow.removeListener("app-command", handleBrowserAppCommand);
       const sessionToClear = browserSession;
       browserWin = null;
       browserView = null;
@@ -871,33 +796,21 @@ function createWindowRuntime(deps) {
   }
 
   function ensureReaderWindow() {
-    if (readerWin && !readerWin.isDestroyed()) {
-      readerWin.focus();
-      return readerWin;
-    }
-
-    readerWin = new BrowserWindow({
-      width: 1100,
-      height: 780,
+    readerWin = ensureAreaSurface("reader", {
       title: "Reader",
-      icon: APP_ICON_PATH,
-      autoHideMenuBar: true,
-      backgroundColor: getBootstrapBackgroundColor(),
-      webPreferences: {
-        preload: preloadScriptPath("reader_preload.js"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        partition: UI_PARTITION,
-      },
+      role: "reader",
+      preload: preloadScriptPath("reader_preload.js"),
+      htmlFile: "reader.html",
+    }, () => {
+      readerWin = null;
     });
-
-    readerWin.loadFile(path.join(appRootDir, "windows", "reader.html"), { query: { bootstrapTheme: getBootstrapTheme() } });
-    assignWebContentsRole(readerWin.webContents, "reader");
-    attachUiNavigationGuards(readerWin, "reader");
-    readerWin.on("closed", () => (readerWin = null));
     return readerWin;
   }
+
+  // Reader sessions are shown as individual tabs; tab clicks are forwarded back to the reader page.
+  tabShell.setReaderCommandSender((command) => {
+    if (readerWin && !readerWin.isDestroyed()) readerWin.webContents.send("reader:shellCommand", command);
+  });
 
   function initializeUiSession() {
     uiSession = session.fromPartition(UI_PARTITION);
@@ -925,6 +838,8 @@ function createWindowRuntime(deps) {
     getGroupManagerWin: () => groupManagerWin,
     getTagManagerWin: () => tagManagerWin,
     getReaderWin: () => readerWin,
+    getShellWindow: () => tabShell.getShellWindow(),
+    tabShell,
     getBrowserSidePanelWidth: () => browserSidePanelWidth,
     setBrowserSidePanelWidth: (value) => {
       browserSidePanelWidth = value;
