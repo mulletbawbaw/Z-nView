@@ -10,6 +10,11 @@
     return String(value || "").toLowerCase();
   }
 
+  // Search-only folding so "cafe" matches "Café"; tag keys keep using normalizeText.
+  function foldSearchText(value) {
+    return normalizeText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
   function normalizeComparableUrl(value) {
     const raw = String(value || "").trim();
     if (!raw) return "";
@@ -158,7 +163,7 @@
       ...(Array.isArray(item.parodies) ? item.parodies : []),
       ...(Array.isArray(item.characters) ? item.characters : []),
     ]
-      .map(normalizeText)
+      .map(foldSearchText)
       .join(" ");
 
     const galleryIdFallback = normalizeText(item.galleryId);
@@ -176,7 +181,7 @@
         return true;
       }
 
-      if (primaryHaystack.includes(token)) {
+      if (primaryHaystack.includes(foldSearchText(token))) {
         return true;
       }
 

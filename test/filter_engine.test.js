@@ -79,6 +79,17 @@ test('matchesSearch supports source-scoped identity token and canonical url matc
   assert.equal(engine.matchesSearch(item, engine.tokenize('https://nhentai.net/g/12345/?p=999#hash')), true);
 });
 
+test('matchesSearch ignores diacritics in both query and metadata', () => {
+  const engine = loadFilterEngine();
+  const item = { title: 'Café Lumière', artist: 'Élodie Martin', tags: ['slice of life'] };
+
+  assert.equal(engine.matchesSearch(item, engine.tokenize('cafe')), true);
+  assert.equal(engine.matchesSearch(item, engine.tokenize('CAFÉ lumiere')), true);
+  assert.equal(engine.matchesSearch(item, engine.tokenize('elodie')), true);
+  assert.equal(engine.matchesSearch({ title: 'Cafe Noir' }, engine.tokenize('café')), true);
+  assert.equal(engine.matchesSearch(item, engine.tokenize('cafeteria')), false);
+});
+
 test('matchesSearch keeps galleryId search as fallback when source identity is missing', () => {
   const engine = loadFilterEngine();
   const item = {
