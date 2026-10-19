@@ -98,6 +98,8 @@
       if (!isOpen()) return;
       if (isEditableTarget(event.target)) return;
       if (!readerPageController.hasPages()) return;
+      // Paged layout turns whole spreads; the reader renderer owns that navigation.
+      if (readerPageController.getLayout?.().layoutMode === "paged") return;
       event.preventDefault();
       const currentIndex = readerPageController.getCurrentPageIndex();
       const maxIndex = Math.max(0, readerPageController.getPageCount() - 1);

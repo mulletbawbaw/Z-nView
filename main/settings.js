@@ -231,11 +231,55 @@ function createSettingsManager({
     return Math.min(1, Math.max(0.4, parsed));
   }
 
+  const READER_LAYOUT_OPTIONS = Object.freeze({
+    layoutMode: ["vertical", "paged"],
+    readingDirection: ["ltr", "rtl"],
+    pageSpread: ["single", "double"],
+  });
+  const READER_COMIC_OVERRIDES_MAX = 500;
+
+  function normalizeReaderLayoutPrefs(value, fallback) {
+    const source = value && typeof value === "object" ? value : {};
+    const normalized = {};
+    for (const [field, allowed] of Object.entries(READER_LAYOUT_OPTIONS)) {
+      const raw = String(source[field] ?? "").trim().toLowerCase();
+      normalized[field] = allowed.includes(raw) ? raw : fallback[field];
+    }
+    return normalized;
+  }
+
+  // Per-comic reader choices keyed by the comic folder id; only the most recently updated entries are kept.
+  function normalizeReaderComicOverrides(value, fallback) {
+    const source = value && typeof value === "object" ? value : {};
+    const entries = [];
+    for (const [rawKey, entry] of Object.entries(source)) {
+      const key = String(rawKey || "").trim();
+      if (!/^comic_[\w-]+$/.test(key) || !entry || typeof entry !== "object") continue;
+      const updatedAt = Number(entry.updatedAt);
+      entries.push([key, {
+        ...normalizeReaderLayoutPrefs(entry, fallback),
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0,
+      }]);
+    }
+    entries.sort((a, b) => b[1].updatedAt - a[1].updatedAt);
+    return Object.fromEntries(entries.slice(0, READER_COMIC_OVERRIDES_MAX));
+  }
+
   function normalizeReaderSettings(value) {
     const source = value && typeof value === "object" ? value : {};
+    const defaults = defaultSettings?.reader || {};
+    const layoutDefaults = normalizeReaderLayoutPrefs(defaults, {
+      layoutMode: "vertical",
+      readingDirection: "ltr",
+      pageSpread: "single",
+    });
+    const layout = normalizeReaderLayoutPrefs(source, layoutDefaults);
     return {
       windowedResidency: normalizeReaderWindowedResidency(source.windowedResidency),
       widthScale: normalizeReaderWidthScale(source.widthScale),
+      ...layout,
+      autoDirectionByLanguage: Boolean(source.autoDirectionByLanguage ?? defaults.autoDirectionByLanguage ?? true),
+      comicOverrides: normalizeReaderComicOverrides(source.comicOverrides, layout),
     };
   }
 

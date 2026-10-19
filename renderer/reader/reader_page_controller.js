@@ -18,6 +18,7 @@
     scrollVelocityPrefetchCutoff: 1.6,
   });
   const READER_RESIDENCY_AGGRESSIVE_MODE_MIN_MS = 8000;
+  const readerLayoutModule = globalObj.nviewReaderLayout || null;
   const READER_PAGE_STATUS = Object.freeze({
     IDLE: "idle",
     LOADING: "loading",
@@ -167,8 +168,16 @@
     onVaultLocked = () => {},
     readerRuntimeConfig = {},
     readerInstrumentation = null,
+    onPageChange = () => {},
   }) {
     let readerPageEls = [];
+    // Paged layout shows one spread (one or two pages) at a time instead of a scrolling column.
+    let readerLayoutMode = "vertical";
+    let readerReadingDirection = "ltr";
+    let readerPageSpread = "single";
+    let readerSpreads = [];
+    let readerSpreadIndex = 0;
+    let readerVisiblePageEls = [];
     let readerWidthScale = READER_PAGE_WIDTH_SCALE_DEFAULT;
     let readerResizeObserver = null;
     let readerResizeRaf = null;
@@ -259,8 +268,12 @@
       return Math.min(1, maxWidth / naturalWidth);
     }
 
+    function isPagedLayout() {
+      return readerLayoutMode === "paged";
+    }
+
     function applyReaderPageWidthStyle(img) {
-      if (!img) return;
+      if (!img || isPagedLayout()) return;
       const { width: contentWidth, height: contentHeight } = getReaderContentSize();
       const natural = getReaderPageNaturalSize(img);
       const renderedWidth = natural
@@ -306,7 +319,7 @@
     }
 
     function setReaderPageMinHeight(img) {
-      if (!img) return;
+      if (!img || isPagedLayout()) return;
       applyReaderPageWidthStyle(img);
       let height = computeReaderPageHeight(img);
       if (!height) {
@@ -320,7 +333,7 @@
     }
 
     function applyReaderPageMinHeight(img) {
-      if (!img) return;
+      if (!img || isPagedLayout()) return;
       applyReaderPageWidthStyle(img);
       const knownHeight = Number(img.dataset.pageHeight || 0);
       const height =
@@ -333,7 +346,7 @@
 
     function updateReaderPageHeights() {
       if (readerEl.style.display !== "block") return;
-      if (!readerPageEls.length) return;
+      if (!readerPageEls.length || isPagedLayout()) return;
       for (const img of readerPageEls) {
         if (img.dataset.blobLoaded === "1") {
           setReaderPageMinHeight(img);
@@ -768,6 +781,10 @@
             state.knownWidth = naturalWidth;
             state.knownHeight = naturalHeight;
           }
+          if (isPagedLayout()) {
+            refreshSpreads();
+            return;
+          }
           win.requestAnimationFrame(() => {
             setReaderPageMinHeight(img);
             const cachedHeight = Number(img.dataset.pageHeight || 0);
@@ -933,6 +950,10 @@
 
     function scrollToPage(index, behavior = "smooth", scheduleAlignment = true) {
       if (!readerPageEls.length) return;
+      if (isPagedLayout()) {
+        goToPage(index);
+        return;
+      }
       const clamped = Math.max(0, Math.min(index, readerPageEls.length - 1));
       const target = readerPageEls[clamped];
       if (!target) return;
@@ -948,6 +969,7 @@
 
     function getViewportAnchorPageIndex() {
       if (!readerPageEls.length || !pagesEl) return -1;
+      if (isPagedLayout()) return getCurrentPageIndex();
       if (typeof document.elementFromPoint === "function") {
         const containerRect = pagesEl.getBoundingClientRect();
         const left = Number.isFinite(containerRect.left) ? containerRect.left : 0;
@@ -972,6 +994,10 @@
 
     function getCurrentPageIndex() {
       if (!readerPageEls.length) return -1;
+      if (isPagedLayout()) {
+        const spread = readerSpreads[readerSpreadIndex];
+        return spread ? spread[0] : 0;
+      }
       ensureReaderMetricsReady();
       const paddingTop = getReaderScrollPaddingTop();
       if (pagesEl.scrollTop <= paddingTop + 1) return 0;
@@ -991,6 +1017,7 @@
       return Math.max(0, Math.min(left, readerPageEls.length - 1));
     }
     function getCurrentPageOffsetPx() {
+      if (isPagedLayout()) return 0;
       const index = getCurrentPageIndex();
       if (index < 0 || !pagesEl) return 0;
       const metric = readerPageMetrics[index];
@@ -1002,6 +1029,10 @@
 
     function scrollToPageWithOffset(index, offsetPx = 0, behavior = "auto") {
       if (!readerPageEls.length || !pagesEl) return;
+      if (isPagedLayout()) {
+        goToPage(index);
+        return;
+      }
       const clamped = Math.max(0, Math.min(Number(index) || 0, readerPageEls.length - 1));
       ensureReaderMetricsReady();
       const metric = readerPageMetrics[clamped];
@@ -1036,6 +1067,155 @@
         readerPageSelectDebounceTimer = null;
         updateReaderPageSelect();
       }, READER_PAGE_JUMP_SELECT_DEBOUNCE_MS);
+    }
+
+    function getPageDims() {
+      return readerPageEls.map((img) => ({
+        w: Number(img.dataset.naturalWidth || 0),
+        h: Number(img.dataset.naturalHeight || 0),
+      }));
+    }
+
+    function computeReaderSpreads() {
+      if (!readerLayoutModule) return readerPageEls.map((_, index) => [index]);
+      return readerLayoutModule.computeSpreads(getPageDims(), { pageSpread: readerPageSpread });
+    }
+
+    function findReaderSpreadIndex(pageIndex) {
+      if (readerLayoutModule) return readerLayoutModule.findSpreadIndex(readerSpreads, pageIndex);
+      return Math.max(0, Math.min(Number(pageIndex) || 0, readerSpreads.length - 1));
+    }
+
+    function applyLayoutAttributes() {
+      if (!pagesEl?.dataset) return;
+      if (isPagedLayout()) {
+        pagesEl.dataset.layout = "paged";
+        pagesEl.dataset.direction = readerReadingDirection;
+        return;
+      }
+      delete pagesEl.dataset.layout;
+      delete pagesEl.dataset.direction;
+      delete pagesEl.dataset.spreadCount;
+    }
+
+    function clearVisibleSpread() {
+      for (const el of readerVisiblePageEls) el.classList.remove("is-visible");
+      readerVisiblePageEls = [];
+    }
+
+    function showSpread(spreadIndex, { notify = true } = {}) {
+      if (!pagesEl || !readerSpreads.length) return;
+      const clamped = Math.max(0, Math.min(Number(spreadIndex) || 0, readerSpreads.length - 1));
+      clearVisibleSpread();
+      readerSpreadIndex = clamped;
+      readerVisiblePageEls = readerSpreads[clamped].map((index) => readerPageEls[index]).filter(Boolean);
+      for (const el of readerVisiblePageEls) el.classList.add("is-visible");
+      if (pagesEl.dataset) pagesEl.dataset.spreadCount = String(readerVisiblePageEls.length);
+      pagesEl.scrollTop = 0;
+      updateReaderPageSelect();
+      scheduleWindowedResidencyUpdate();
+      if (notify) {
+        onPageChange({
+          pageIndex: getCurrentPageIndex(),
+          spreadIndex: clamped,
+          spreadCount: readerSpreads.length,
+        });
+      }
+    }
+
+    function goToPage(index) {
+      if (!isPagedLayout() || !readerPageEls.length) return;
+      const clamped = Math.max(0, Math.min(Number(index) || 0, readerPageEls.length - 1));
+      showSpread(findReaderSpreadIndex(clamped));
+    }
+
+    function isSameSpreadList(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i += 1) {
+        if (a[i].length !== b[i].length || a[i].some((value, j) => value !== b[i][j])) return false;
+      }
+      return true;
+    }
+
+    // Real page sizes arrive as pages load, which can change which pages pair up in double mode.
+    function refreshSpreads() {
+      if (!isPagedLayout() || !readerPageEls.length) return;
+      const anchorIndex = getCurrentPageIndex();
+      const nextSpreads = computeReaderSpreads();
+      if (isSameSpreadList(nextSpreads, readerSpreads)) return;
+      readerSpreads = nextSpreads;
+      showSpread(findReaderSpreadIndex(anchorIndex), { notify: false });
+    }
+
+    function isAtEnd() {
+      if (!readerPageEls.length) return false;
+      if (isPagedLayout()) return readerSpreadIndex >= readerSpreads.length - 1;
+      if (!pagesEl) return false;
+      return pagesEl.scrollTop + pagesEl.clientHeight >= pagesEl.scrollHeight - 4;
+    }
+
+    function stepPage(delta) {
+      if (!readerPageEls.length) return false;
+      if (isPagedLayout()) {
+        const target = readerSpreadIndex + delta;
+        if (target < 0 || target >= readerSpreads.length) return false;
+        showSpread(target);
+        return true;
+      }
+      const current = getCurrentPageIndex();
+      const target = current + delta;
+      if (target < 0 || target >= readerPageEls.length) return false;
+      scrollToPage(target, "auto");
+      return true;
+    }
+
+    function getLayout() {
+      return {
+        layoutMode: readerLayoutMode,
+        readingDirection: readerReadingDirection,
+        pageSpread: readerPageSpread,
+      };
+    }
+
+    // `anchorIndex` lets callers that are about to restore a saved page keep it across the layout switch.
+    function setLayout(next = {}, { anchorIndex: requestedAnchorIndex } = {}) {
+      const normalized = readerLayoutModule
+        ? readerLayoutModule.normalizeLayoutPrefs(next, getLayout())
+        : { ...getLayout(), ...next };
+      const current = getLayout();
+      if (
+        normalized.layoutMode === current.layoutMode &&
+        normalized.readingDirection === current.readingDirection &&
+        normalized.pageSpread === current.pageSpread
+      ) {
+        return current;
+      }
+      const wasPaged = isPagedLayout();
+      const anchorIndex = Number.isInteger(requestedAnchorIndex)
+        ? Math.max(0, requestedAnchorIndex)
+        : Math.max(0, getCurrentPageIndex());
+      readerLayoutMode = normalized.layoutMode;
+      readerReadingDirection = normalized.readingDirection;
+      readerPageSpread = normalized.pageSpread;
+      applyLayoutAttributes();
+
+      if (isPagedLayout()) {
+        if (!wasPaged) {
+          for (const img of readerPageEls) {
+            img.style.width = "";
+            img.style.maxWidth = "";
+            img.style.minHeight = "";
+          }
+        }
+        readerSpreads = computeReaderSpreads();
+        if (readerPageEls.length) showSpread(findReaderSpreadIndex(anchorIndex));
+      } else if (wasPaged) {
+        clearVisibleSpread();
+        readerSpreads = [];
+        readerSpreadIndex = 0;
+        reflowReaderAtAnchor(anchorIndex, 0);
+      }
+      return getLayout();
     }
 
     function releaseReaderPageBlobs() {
@@ -1148,7 +1328,12 @@
       }
 
       readerPageEls = Array.from(pagesEl.querySelectorAll(".page"));
+      readerVisiblePageEls = [];
+      readerSpreadIndex = 0;
+      readerSpreads = isPagedLayout() ? computeReaderSpreads() : [];
+      applyLayoutAttributes();
       populateReaderJump(pages);
+      if (isPagedLayout()) showSpread(0, { notify: false });
       queueReaderMetricsRebuild();
       ensureReaderMetricsReady();
       updateReaderPageSelect();
@@ -1163,6 +1348,9 @@
       readerPageEls = [];
       readerPageMetrics = [];
       readerPageStates = [];
+      readerVisiblePageEls = [];
+      readerSpreads = [];
+      readerSpreadIndex = 0;
       if (readerPageSelect) {
         readerPageSelect.innerHTML = "";
         readerPageSelect.disabled = true;
@@ -1262,6 +1450,17 @@
       }),
       getWidthScale,
       setWidthScale,
+      getLayout,
+      setLayout,
+      goToPage: (index) => scrollToPage(index, "auto"),
+      nextPage: () => stepPage(1),
+      prevPage: () => stepPage(-1),
+      isAtEnd,
+      getSpreadInfo: () => ({
+        spreadIndex: readerSpreadIndex,
+        spreadCount: readerSpreads.length,
+        pages: [...(readerSpreads[readerSpreadIndex] || [])],
+      }),
       setRuntimeConfig,
       handleMemoryPressureHint,
     };

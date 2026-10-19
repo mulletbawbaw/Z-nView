@@ -730,3 +730,58 @@ test('bootstrap library context can be loaded before encrypted settings and rebo
   const loaded = manager.reloadSettings();
   assert.equal(loaded.startPage, 'https://b.example');
 });
+
+test('normalizes reader layout preferences and per-comic overrides', () => {
+  const root = makeTempDir();
+  const vaultManager = {
+    isInitialized: () => true,
+    isUnlocked: () => true,
+    encryptBufferWithKey: ({ buffer }) => buffer,
+    decryptBufferWithKey: ({ buffer }) => buffer,
+  };
+  const manager = createSettingsManager({
+    settingsFile: path.join(root, 'settings.json.enc'),
+    settingsPlaintextFile: path.join(root, 'settings.json'),
+    basicSettingsFile: path.join(root, 'basic_settings.json'),
+    settingsRelPath: 'settings.json',
+    defaultSettings: defaultSettings(),
+    getWindows: () => [],
+    vaultManager,
+  });
+
+  const defaults = manager.getSettings().reader;
+  assert.equal(defaults.layoutMode, 'vertical');
+  assert.equal(defaults.readingDirection, 'ltr');
+  assert.equal(defaults.pageSpread, 'single');
+  assert.equal(defaults.autoDirectionByLanguage, true);
+  assert.deepEqual(defaults.comicOverrides, {});
+
+  manager.updateSettings({
+    reader: {
+      widthScale: 0.7,
+      layoutMode: 'PAGED',
+      readingDirection: 'diagonal',
+      pageSpread: 'double',
+      autoDirectionByLanguage: false,
+      comicOverrides: {
+        comic_1_1: { layoutMode: 'paged', readingDirection: 'rtl', pageSpread: 'single', updatedAt: 5 },
+        '../escape': { layoutMode: 'paged' },
+        comic_2_1: 'not-an-object',
+      },
+    },
+  });
+
+  const reader = manager.getSettings().reader;
+  assert.equal(reader.widthScale, 0.7);
+  assert.equal(reader.layoutMode, 'paged');
+  assert.equal(reader.readingDirection, 'ltr');
+  assert.equal(reader.pageSpread, 'double');
+  assert.equal(reader.autoDirectionByLanguage, false);
+  assert.deepEqual(Object.keys(reader.comicOverrides), ['comic_1_1']);
+  assert.deepEqual(reader.comicOverrides.comic_1_1, {
+    layoutMode: 'paged',
+    readingDirection: 'rtl',
+    pageSpread: 'single',
+    updatedAt: 5,
+  });
+});

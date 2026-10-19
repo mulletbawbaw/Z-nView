@@ -41,6 +41,21 @@
             <span class="icon icon-zoom readerWidthIcon" aria-hidden="true"></span>
             <input id="readerWidthScale" class="slider" type="range" min="40" max="100" step="1" value="100" aria-label="Reader page width" data-tooltip="Adjust page width" />
           </label>
+          <div id="readerLayoutControls" class="reader-layout-controls">
+            <div class="reader-segmented" role="group" aria-label="Reading mode">
+              <button type="button" data-layout-mode="vertical" aria-pressed="true" data-tooltip="Continuous vertical scroll (V)">Vertical</button>
+              <button type="button" data-layout-mode="paged" aria-pressed="false" data-tooltip="One screen at a time (P)">Paged</button>
+            </div>
+            <div class="reader-segmented" role="group" aria-label="Reading direction">
+              <button type="button" data-reading-direction="ltr" aria-pressed="true" data-tooltip="Western: left to right (D)">Western</button>
+              <button type="button" data-reading-direction="rtl" aria-pressed="false" data-tooltip="Manga: right to left (D)">Manga</button>
+            </div>
+            <div class="reader-segmented" role="group" aria-label="Pages per screen">
+              <button type="button" data-page-spread="single" aria-pressed="true" data-tooltip="Single page (S)">1</button>
+              <button type="button" data-page-spread="double" aria-pressed="false" data-tooltip="Two-page spread, cover alone (S)">2</button>
+            </div>
+          </div>
+          <span id="readerProgress" class="reader-progress" aria-live="polite"></span>
           <label class="readerJump" for="readerPageSelect">
             <select id="readerPageSelect" aria-label="Jump to page"></select>
             <button id="readerPageSelectTrigger" class="reader-select-trigger" type="button" aria-label="Jump to page" hidden></button>
@@ -70,6 +85,11 @@
           </div>
         </div>
         <div id="pages"></div>
+        <div id="readerEndCard" class="reader-end-card" role="status" hidden>
+          <span id="readerEndText" class="reader-end-text"></span>
+          <button id="readerEndNext" class="button-with-icon save-btn" type="button" hidden>Next</button>
+          <button id="readerEndDismiss" class="modal-close-btn" type="button" aria-label="Dismiss" data-tooltip="Dismiss">✕</button>
+        </div>
       </div>
     </div>
 
@@ -207,6 +227,7 @@
     <script src="../renderer/context_menu/context_menu_controller.js"></script>
     <script src="../renderer/shared/dropdown.js"></script>
     <script src="../renderer/shared/tooltip.js"></script>
+    <script src="../renderer/reader/reader_layout.js"></script>
     <script src="../renderer/reader/reader_page_controller.js"></script>
     <script src="../renderer/reader/reader_runtime.js"></script>
     <script src="../renderer/reader/reader_group_batch_core.js"></script>

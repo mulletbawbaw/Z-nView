@@ -382,6 +382,7 @@ const readerPageController = readerPageControllerModule.createReaderPageControll
   appBlobFetchOptions,
   readerRuntimeConfig,
   readerInstrumentation,
+  onPageChange: () => handleReaderPageChange(),
 }) || null;
 
 if (!readerPageController) {
@@ -403,14 +404,283 @@ function applyReaderWidthScale(scale) {
   return normalized;
 }
 
-async function persistReaderWidthScale(scale) {
+// settings:update merges only top-level keys, so always send the whole reader object.
+async function persistReaderSettings(patch) {
   if (typeof window.readerApi?.updateSettings !== "function") return;
-  await window.readerApi.updateSettings({
-    reader: {
-      widthScale: normalizeReaderWidthScale(scale),
-    },
+  const currentReader = readerSettingsCache?.reader && typeof readerSettingsCache.reader === "object"
+    ? readerSettingsCache.reader
+    : {};
+  const nextReader = { ...currentReader, ...patch };
+  readerSettingsCache.reader = nextReader;
+  await window.readerApi.updateSettings({ reader: nextReader });
+}
+
+async function persistReaderWidthScale(scale) {
+  await persistReaderSettings({ widthScale: normalizeReaderWidthScale(scale) });
+}
+
+const readerLayout = window.nviewReaderLayout || null;
+const readerLayoutControlsEl = $("readerLayoutControls");
+const readerProgressEl = $("readerProgress");
+const readerEndCardEl = $("readerEndCard");
+const readerEndTextEl = $("readerEndText");
+const readerEndNextBtn = $("readerEndNext");
+const readerEndDismissBtn = $("readerEndDismiss");
+const READER_WHEEL_PAGE_THROTTLE_MS = 220;
+let readerLastWheelPageAt = 0;
+let readerEndCardDismissedForSessionId = null;
+let readerProgressRaf = null;
+
+function getActiveLayout() {
+  return readerPageController.getLayout?.() || { layoutMode: "vertical", readingDirection: "ltr", pageSpread: "single" };
+}
+
+function isPagedReaderLayout() {
+  return getActiveLayout().layoutMode === "paged";
+}
+
+function renderReaderLayoutControls() {
+  if (!readerLayoutControlsEl) return;
+  const layout = getActiveLayout();
+  const paged = layout.layoutMode === "paged";
+  for (const button of readerLayoutControlsEl.querySelectorAll("button")) {
+    let pressed = false;
+    if (button.dataset.layoutMode) pressed = button.dataset.layoutMode === layout.layoutMode;
+    if (button.dataset.readingDirection) pressed = button.dataset.readingDirection === layout.readingDirection;
+    if (button.dataset.pageSpread) {
+      pressed = button.dataset.pageSpread === layout.pageSpread;
+      button.disabled = !paged;
+    }
+    button.setAttribute("aria-pressed", pressed ? "true" : "false");
+  }
+  if (readerWidthScaleInput) readerWidthScaleInput.disabled = paged;
+}
+
+function renderReaderProgress() {
+  if (!readerProgressEl) return;
+  const total = readerPageController.getPageCount?.() || 0;
+  if (!total) {
+    readerProgressEl.textContent = "";
+    return;
+  }
+  const current = Math.max(0, readerPageController.getCurrentPageIndex?.() ?? 0);
+  const visible = isPagedReaderLayout() ? readerPageController.getSpreadInfo?.()?.pages || [] : [];
+  if (visible.length > 1) {
+    readerProgressEl.textContent = `${Math.min(...visible) + 1}–${Math.max(...visible) + 1} / ${total}`;
+    return;
+  }
+  readerProgressEl.textContent = `${current + 1} / ${total}`;
+}
+
+function scheduleReaderProgressRender() {
+  if (readerProgressRaf) return;
+  readerProgressRaf = window.requestAnimationFrame(() => {
+    readerProgressRaf = null;
+    renderReaderProgress();
+    updateReaderEndCard();
   });
 }
+
+function handleReaderPageChange() {
+  if (!isRestoringSessionPage) captureActiveSessionState();
+  scheduleReaderProgressRender();
+}
+
+// Applies the remembered (or language-based) layout for a comic before its saved page is restored.
+function applyLayoutForSession(session, anchorIndex) {
+  if (!session) return;
+  const prefs = readerLayout?.resolveReaderPreferences?.({
+    readerSettings: readerSettingsCache?.reader,
+    comicId: parseMangaIdFromDir(session.comicDir),
+    languages: session.comicMeta?.languages,
+  });
+  if (prefs) readerPageController.setLayout?.(prefs, { anchorIndex });
+  renderReaderLayoutControls();
+}
+
+// A change made while reading is remembered for that comic. Mode and pages-per-screen also become the
+// default for new comics; direction stays per comic because it depends on the content.
+async function changeReaderLayout(patch) {
+  const before = getActiveLayout();
+  const next = readerPageController.setLayout?.({ ...before, ...patch }) || before;
+  renderReaderLayoutControls();
+  scheduleReaderProgressRender();
+  const session = getActiveSession();
+  const comicId = parseMangaIdFromDir(session?.comicDir);
+  const currentReader = readerSettingsCache?.reader || {};
+  const withOverride = comicId && readerLayout?.withComicOverride
+    ? readerLayout.withComicOverride(currentReader, comicId, next)
+    : currentReader;
+  await persistReaderSettings({
+    comicOverrides: withOverride.comicOverrides || currentReader.comicOverrides || {},
+    layoutMode: next.layoutMode,
+    pageSpread: next.pageSpread,
+  });
+}
+
+function cycleReaderLayoutField(field, values) {
+  const current = getActiveLayout()[field];
+  const nextValue = values[(values.indexOf(current) + 1) % values.length];
+  void changeReaderLayout({ [field]: nextValue });
+}
+
+async function resolveNextComicInGroup(comicDir) {
+  const mangaId = parseMangaIdFromDir(comicDir);
+  if (!mangaId || !window.readerApi?.listGroups || !window.readerApi?.getGroup) return null;
+  if (!libraryItems.length) await hydrateEditSuggestions();
+  const listed = await window.readerApi.listGroups();
+  if (!listed?.ok || !Array.isArray(listed.groups)) return null;
+  for (const group of listed.groups) {
+    const groupId = String(group?.groupId || "").trim();
+    if (!groupId) continue;
+    const groupRes = await window.readerApi.getGroup({ groupId });
+    const ids = Array.isArray(groupRes?.group?.mangaIds) ? groupRes.group.mangaIds : [];
+    const position = ids.indexOf(mangaId);
+    if (position < 0) continue;
+    const nextId = ids[position + 1];
+    if (!nextId) return { groupName: String(groupRes.group.name || group.name || ""), next: null };
+    const nextItem = libraryItems.find((item) => parseMangaIdFromDir(item?.dir) === nextId);
+    if (!nextItem?.dir) continue;
+    return {
+      groupName: String(groupRes.group.name || group.name || ""),
+      next: { dir: nextItem.dir, title: String(nextItem.title || nextItem.comicName || nextId) },
+    };
+  }
+  return null;
+}
+
+async function refreshNextComicForSession(session) {
+  if (!session) return;
+  session.sequence = undefined;
+  try {
+    session.sequence = await resolveNextComicInGroup(session.comicDir);
+  } catch {
+    session.sequence = null;
+  }
+  if (getActiveSession() === session) updateReaderEndCard();
+}
+
+function hideReaderEndCard() {
+  if (readerEndCardEl) readerEndCardEl.hidden = true;
+}
+
+function updateReaderEndCard({ force = false } = {}) {
+  if (!readerEndCardEl) return;
+  const session = getActiveSession();
+  const atEnd = Boolean(session) && readerPageController.isAtEnd?.();
+  if (!atEnd || (!force && readerEndCardDismissedForSessionId === session.id)) {
+    hideReaderEndCard();
+    return;
+  }
+  const next = session.sequence?.next || null;
+  if (readerEndTextEl) {
+    readerEndTextEl.textContent = next ? `Next: ${next.title}` : "End of this manga";
+    readerEndTextEl.title = readerEndTextEl.textContent;
+  }
+  if (readerEndNextBtn) readerEndNextBtn.hidden = !next;
+  readerEndCardEl.hidden = false;
+}
+
+function navigateReader(action) {
+  if (!readerPageController.hasPages?.()) return false;
+  if (action === "first") {
+    readerPageController.goToPage?.(0);
+    return true;
+  }
+  if (action === "last") {
+    readerPageController.goToPage?.(Math.max(0, (readerPageController.getPageCount?.() || 1) - 1));
+    return true;
+  }
+  const moved = action === "prev" ? readerPageController.prevPage?.() : readerPageController.nextPage?.();
+  if (!moved && action === "next") updateReaderEndCard({ force: true });
+  return Boolean(moved);
+}
+
+function isReaderShortcutBlocked(event) {
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return true;
+  const target = event.target;
+  const tagName = target?.tagName?.toLowerCase();
+  if (target?.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select") return true;
+  if (isModalVisible(editModalEl) || isModalVisible(editPagesModalEl) || isModalVisible(appConfirmModalEl)) return true;
+  return !readerRuntime.isOpen?.();
+}
+
+function handleReaderLayoutKeydown(event) {
+  if (isReaderShortcutBlocked(event)) return;
+  const key = String(event.key || "");
+  if (!event.repeat && !event.shiftKey) {
+    const lower = key.toLowerCase();
+    if (lower === "v" || lower === "p") {
+      event.preventDefault();
+      void changeReaderLayout({ layoutMode: lower === "v" ? "vertical" : "paged" });
+      return;
+    }
+    if (lower === "d") {
+      event.preventDefault();
+      cycleReaderLayoutField("readingDirection", ["ltr", "rtl"]);
+      return;
+    }
+    if (lower === "s" && isPagedReaderLayout()) {
+      event.preventDefault();
+      cycleReaderLayoutField("pageSpread", ["single", "double"]);
+      return;
+    }
+  }
+  if (!isPagedReaderLayout()) return;
+  const action = readerLayout?.resolveNavigationKey?.(key, {
+    readingDirection: getActiveLayout().readingDirection,
+    shiftKey: event.shiftKey,
+  });
+  if (!action) return;
+  event.preventDefault();
+  navigateReader(action);
+}
+
+readerLayoutControlsEl?.addEventListener("click", (event) => {
+  const button = event.target?.closest?.("button");
+  if (!button || button.disabled) return;
+  if (button.dataset.layoutMode) void changeReaderLayout({ layoutMode: button.dataset.layoutMode });
+  if (button.dataset.readingDirection) void changeReaderLayout({ readingDirection: button.dataset.readingDirection });
+  if (button.dataset.pageSpread) void changeReaderLayout({ pageSpread: button.dataset.pageSpread });
+});
+
+pagesEl?.addEventListener("click", (event) => {
+  if (!isPagedReaderLayout() || event.button !== 0) return;
+  const rect = pagesEl.getBoundingClientRect();
+  if (!rect.width) return;
+  const action = readerLayout?.resolveClickZoneAction?.((event.clientX - rect.left) / rect.width, {
+    readingDirection: getActiveLayout().readingDirection,
+  });
+  if (action) navigateReader(action);
+});
+
+pagesEl?.addEventListener("wheel", (event) => {
+  if (!isPagedReaderLayout() || event.ctrlKey) return;
+  event.preventDefault();
+  const now = Date.now();
+  if (now - readerLastWheelPageAt < READER_WHEEL_PAGE_THROTTLE_MS) return;
+  const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+  if (Math.abs(delta) < 4) return;
+  readerLastWheelPageAt = now;
+  navigateReader(delta > 0 ? "next" : "prev");
+}, { passive: false });
+
+pagesEl?.addEventListener("scroll", () => {
+  if (!isPagedReaderLayout()) scheduleReaderProgressRender();
+}, { passive: true });
+
+readerEndNextBtn?.addEventListener("click", () => {
+  const next = getActiveSession()?.sequence?.next;
+  hideReaderEndCard();
+  if (next?.dir) void openComicByDir(next.dir);
+});
+
+readerEndDismissBtn?.addEventListener("click", () => {
+  readerEndCardDismissedForSessionId = readManagerState.activeSessionId;
+  hideReaderEndCard();
+});
+
+document.addEventListener("keydown", handleReaderLayoutKeydown);
 
 function applyTheme(isDark) {
   document.body.classList.toggle("dark", Boolean(isDark));
@@ -802,7 +1072,16 @@ function captureActiveSessionState() {
   captureSessionState(readManagerState.activeSessionId);
 }
 
+function publishShellSessions() {
+  if (typeof window.readerApi?.publishShellSessions !== "function") return;
+  void window.readerApi.publishShellSessions({
+    sessions: readManagerState.sessions.map((session) => ({ id: session.id, title: session.title || "Reader" })),
+    activeSessionId: readManagerState.activeSessionId || "",
+  });
+}
+
 function renderReadManager() {
+  publishShellSessions();
   if (!readManagerSessionListEl) return;
   readManagerSessionListEl.textContent = "";
 
@@ -867,6 +1146,11 @@ function formatSessionSubtitle(session) {
 }
 
 function closeReaderWindow() {
+  // Inside the tabbed main window the reader is a tab; ask main to close it instead of the page.
+  if (typeof window.readerApi?.closeReaderTab === "function") {
+    void window.readerApi.closeReaderTab();
+    return;
+  }
   window.close();
 }
 
@@ -1367,8 +1651,16 @@ async function activateSession(sessionId) {
       ? Math.max(0, Math.min(targetSession.selectedPageIndex, maxIndex))
       : 0;
     targetSession.selectedPageIndex = savedIndex;
+    applyLayoutForSession(targetSession, savedIndex);
     readerPageController.scrollToPage?.(savedIndex, "auto", false);
+  } else {
+    applyLayoutForSession(targetSession, 0);
   }
+
+  if (previousSessionId !== sessionId) readerEndCardDismissedForSessionId = null;
+  hideReaderEndCard();
+  scheduleReaderProgressRender();
+  if (targetSession.sequence === undefined) void refreshNextComicForSession(targetSession);
 
   window.requestAnimationFrame(() => {
     if (activationToken !== sessionActivationToken) return;
@@ -1701,6 +1993,13 @@ async function hydrateEditSuggestions() {
     : (Array.isArray(response.items) ? response.items : []);
   libraryItems = nextItems;
 }
+
+window.readerApi.onShellCommand?.((command) => {
+  const sessionId = String(command?.sessionId || "");
+  if (!readManagerState.sessions.some((session) => session.id === sessionId)) return;
+  if (command?.action === "activate") void activateSession(sessionId);
+  if (command?.action === "close") void closeSessionById(sessionId);
+});
 
 window.readerApi.onOpenComic?.(({ comicDir }) => {
   void enqueueOpenComicByDir(comicDir);
