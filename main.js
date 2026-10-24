@@ -56,6 +56,7 @@ const {
 const { createExportRuntime } = require("./main/export_runtime");
 const { normalizeOpenPathResult } = require("./main/file_open");
 const { registerMainIpcHandlers } = require("./main/ipc/register_main_ipc");
+const { createSessionRestore } = require("./main/session_restore");
 const { buildMainIpcContext } = require("./main/ipc/main_ipc_context");
 const { createWindowRuntime } = require("./main/window_runtime");
 const { ENABLE_TAG_MANAGER_CMD_LOGGING } = require("./shared/dev_mode");
@@ -145,6 +146,12 @@ const DEFAULT_SETTINGS = {
   tagManager: {
     rolloutStage: "stable",
     telemetryEnabled: true,
+  },
+  session: {
+    restoreTabs: true,
+    openComics: [],
+    activeComicId: "",
+    activeTab: "gallery",
   },
 };
 
@@ -716,6 +723,17 @@ windowRuntime = createWindowRuntime({
   addBookmarkForPage,
   removeBookmarkById,
   appRootDir: __dirname,
+  onAppClosing: () => sessionRestore.freeze(),
+});
+
+const sessionRestore = createSessionRestore({
+  settingsManager,
+  path,
+  fs,
+  getLibraryRoot: LIBRARY_ROOT,
+  isUnderLibraryRoot,
+  isVaultUnlocked: () => vaultManager.isUnlocked(),
+  getActiveTabId: () => windowRuntime.tabShell.getActiveTabId(),
 });
 
 const {
@@ -851,6 +869,7 @@ const mainIpcContext = buildMainIpcContext({
   telemetryLogger: logTagManagerTelemetryEvent,
   getWebContentsRole,
   tabShell: windowRuntime.tabShell,
+  sessionRestore,
 });
 registerMainIpcHandlers(mainIpcContext);
 
@@ -956,6 +975,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  sessionRestore.freeze();
   try {
     void dl.cancelAllJobs();
   } catch (err) {

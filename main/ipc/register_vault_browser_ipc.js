@@ -37,7 +37,7 @@ function logDirectDownload(stage, details) {
 
 function registerVaultBrowserIpcHandlers(context) {
   const {
-    ipcMain, vaultManager, getVaultPolicy, validateVaultPassphrase, normalizeVaultPassphraseInput = null, encryptLibraryForVault, sendToGallery, sendToDownloader, sendToBrowser, ensureBrowserWindow, getBrowserView, getBrowserWin, shell, loadBookmarksFromDisk, addBookmarkForPage, removeBookmarkById, getBrowserSidePanelWidth, setBrowserSidePanelWidth, dl, settingsManager, applyConfiguredLibraryRoot, ensureActiveLibraryScopedEncryptedState, fs, ensureDownloaderWindow, sanitizeAltDownloadPayload, loadLibraryIndexCache
+    ipcMain, vaultManager, getVaultPolicy, validateVaultPassphrase, normalizeVaultPassphraseInput = null, encryptLibraryForVault, sendToGallery, sendToDownloader, sendToBrowser, ensureBrowserWindow, getBrowserView, getBrowserWin, shell, loadBookmarksFromDisk, addBookmarkForPage, removeBookmarkById, getBrowserSidePanelWidth, setBrowserSidePanelWidth, dl, settingsManager, applyConfiguredLibraryRoot, ensureActiveLibraryScopedEncryptedState, fs, ensureDownloaderWindow, sanitizeAltDownloadPayload, loadLibraryIndexCache, sessionRestore
   } = context;
 
 function withPassphraseBuffer(passphraseInput, action) {
@@ -170,6 +170,7 @@ ipcMain.handle("vault:unlock", async (_e, passphrase) =>
       sendToGallery("settings:updated", settings);
       sendToDownloader("settings:updated", settings);
       sendToBrowser("settings:updated", settings);
+      if (typeof sessionRestore?.restoreOnce === "function") sessionRestore.restoreOnce();
     }
     return res;
   },

@@ -785,3 +785,43 @@ test('normalizes reader layout preferences and per-comic overrides', () => {
     updatedAt: 5,
   });
 });
+
+test('normalizes the restore-tabs session and keeps it out of basic settings', () => {
+  const root = makeTempDir();
+  const vaultManager = {
+    isInitialized: () => true,
+    isUnlocked: () => true,
+    encryptBufferWithKey: ({ buffer }) => buffer,
+    decryptBufferWithKey: ({ buffer }) => buffer,
+  };
+  const manager = createSettingsManager({
+    settingsFile: path.join(root, 'settings.json.enc'),
+    settingsPlaintextFile: path.join(root, 'settings.json'),
+    basicSettingsFile: path.join(root, 'basic_settings.json'),
+    settingsRelPath: 'settings.json',
+    defaultSettings: defaultSettings(),
+    getWindows: () => [],
+    vaultManager,
+  });
+
+  assert.deepEqual(manager.getSettings().session, { restoreTabs: true, openComics: [], activeComicId: '', activeTab: 'gallery' });
+
+  manager.updateSettings({
+    session: {
+      restoreTabs: true,
+      openComics: [{ id: 'comic_1', page: 7 }, { id: '../escape', page: 1 }, { id: 'comic_1', page: 2 }, { id: 'comic_2', page: 1.5 }],
+      activeComicId: 'comic_9',
+      activeTab: 'reader',
+    },
+  });
+  assert.deepEqual(manager.getSettings().session, {
+    restoreTabs: true,
+    openComics: [{ id: 'comic_1', page: 7 }, { id: 'comic_2', page: 0 }],
+    activeComicId: '',
+    activeTab: 'reader',
+  });
+  assert.equal(fs.readFileSync(path.join(root, 'basic_settings.json'), 'utf8').includes('comic_1'), false);
+
+  manager.updateSettings({ session: { ...manager.getSettings().session, restoreTabs: false } });
+  assert.deepEqual(manager.getSettings().session, { restoreTabs: false, openComics: [], activeComicId: '', activeTab: 'gallery' });
+});

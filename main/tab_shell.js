@@ -361,9 +361,11 @@ function createTabShell({
   }
 
   /**
-   * @param {{ backgroundColor?: string, onClose?: (event: any) => void, onClosed?: () => void }} [options]
+   * `onClosing` runs when the window is gone but before its views unload (every close path, unlike "close").
+   *
+   * @param {{ backgroundColor?: string, onClose?: (event: any) => void, onClosing?: () => void, onClosed?: () => void }} [options]
    */
-  function ensureShellWindow({ onClose, onClosed } = {}) {
+  function ensureShellWindow({ onClose, onClosing, onClosed } = {}) {
     if (shellWin && !shellWin.isDestroyed()) return shellWin;
     shellWin = new BrowserWindow({
       width: 1280,
@@ -391,6 +393,7 @@ function createTabShell({
     shellWin.on("unmaximize", layoutAll);
     if (typeof onClose === "function") shellWin.on("close", onClose);
     shellWin.on("closed", () => {
+      if (typeof onClosing === "function") onClosing();
       for (const surface of Array.from(surfaces.values())) {
         surface.destroyed = true;
         // Views do not own their webContents lifetime, so close them explicitly with the window.
@@ -482,6 +485,7 @@ function createTabShell({
     closeTab: (tabId) => closeSurface(tabId),
     ensureShellWindow,
     ensureSurface,
+    getActiveTabId: () => activeId,
     getShellWindow: () => shellWin,
     getState,
     getSurface: (id) => surfaces.get(id) || null,

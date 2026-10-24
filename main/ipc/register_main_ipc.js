@@ -140,13 +140,13 @@ const MODULE_CHANNEL_ALLOWED_ROLES = Object.freeze({
 });
 
 const UI_CONTEXT_KEYS = Object.freeze([
-  "ipcMain", "settingsManager", "ensureBrowserWindow", "ensureDownloaderWindow", "emitDownloadCount", "ensureImporterWindow", "ensureExporterWindow", "ensureGroupManagerWindow", "ensureTagManagerWindow", "ensureReaderWindow", "ensureGalleryWindow", "getGalleryWin", "sendToGallery", "sendToReader", "getBrowserView", "getBrowserWin", "sanitizeAltDownloadPayload", "dl", "sendToDownloader", "app",
+  "ipcMain", "settingsManager", "ensureBrowserWindow", "ensureDownloaderWindow", "emitDownloadCount", "ensureImporterWindow", "ensureExporterWindow", "ensureGroupManagerWindow", "ensureTagManagerWindow", "ensureReaderWindow", "ensureGalleryWindow", "getGalleryWin", "sendToGallery", "sendToReader", "getBrowserView", "getBrowserWin", "sanitizeAltDownloadPayload", "dl", "sendToDownloader", "app", "sessionRestore", "tabShell",
 ]);
 const SETTINGS_LIBRARY_CONTEXT_KEYS = Object.freeze([
   "ipcMain", "settingsManager", "dl", "LIBRARY_ROOT", "DEFAULT_LIBRARY_ROOT", "resolveConfiguredLibraryRoot", "validateWritableDirectory", "validateWritableDirectoryAsync", "isDirectoryEmpty", "isDirectoryEmptyAsync", "isSameOrChildPath", "migrateLibraryContentsBatched", "issueLibraryCleanupToken", "applyConfiguredLibraryRoot", "ensureActiveLibraryScopedEncryptedState", "sendToGallery", "sendToDownloader", "sendToBrowser", "sendToReader", "scanLibraryContents", "scanLibraryContentsAsync", "dialog", "getGalleryWin", "getBrowserWin", "getDownloaderWin", "isProtectedCleanupPath", "consumeLibraryCleanupToken", "cleanupHelpers", "fs", "path", "shell", "vaultManager",
 ]);
 const VAULT_BROWSER_CONTEXT_KEYS = Object.freeze([
-  "ipcMain", "vaultManager", "getVaultPolicy", "validateVaultPassphrase", "normalizeVaultPassphraseInput", "encryptLibraryForVault", "sendToGallery", "sendToDownloader", "sendToBrowser", "ensureBrowserWindow", "ensureDownloaderWindow", "getBrowserView", "getBrowserWin", "shell", "loadBookmarksFromDisk", "addBookmarkForPage", "removeBookmarkById", "getBrowserSidePanelWidth", "setBrowserSidePanelWidth", "dl", "settingsManager", "applyConfiguredLibraryRoot", "sanitizeAltDownloadPayload", "fs", "loadLibraryIndexCache", "normalizeGalleryId",
+  "ipcMain", "vaultManager", "getVaultPolicy", "validateVaultPassphrase", "normalizeVaultPassphraseInput", "encryptLibraryForVault", "sendToGallery", "sendToDownloader", "sendToBrowser", "ensureBrowserWindow", "ensureDownloaderWindow", "getBrowserView", "getBrowserWin", "shell", "loadBookmarksFromDisk", "addBookmarkForPage", "removeBookmarkById", "getBrowserSidePanelWidth", "setBrowserSidePanelWidth", "dl", "settingsManager", "applyConfiguredLibraryRoot", "sanitizeAltDownloadPayload", "fs", "loadLibraryIndexCache", "normalizeGalleryId", "sessionRestore",
 ]);
 const DOWNLOADS_FILES_CONTEXT_KEYS = Object.freeze([
   "ipcMain", "dl", "getInProgressDownloadCount", "shell", "ensureDirs", "LIBRARY_ROOT", "vaultManager", "fs", "path", "isUnderLibraryRoot", "normalizeOpenPathResult", "buildComicEntry",

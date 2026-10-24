@@ -71,6 +71,7 @@ function createWindowRuntime(deps) {
     addBookmarkForPage,
     removeBookmarkById,
     appRootDir,
+    onAppClosing = () => {},
   } = deps;
   const preloadBundleDir = path.join(appRootDir, "preload-dist");
 
@@ -402,6 +403,7 @@ function createWindowRuntime(deps) {
         await dl.cancelAllJobs();
         app.quit();
       },
+      onClosing: onAppClosing,
       onClosed: () => {
         closeAuxWindows();
         void clearSessionData(uiSession, "ui-session");

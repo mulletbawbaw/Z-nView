@@ -91,6 +91,7 @@ function buildMainIpcContext(deps) {
     telemetryLogger: deps.telemetryLogger,
     getWebContentsRole: deps.getWebContentsRole,
     tabShell: deps.tabShell,
+    sessionRestore: deps.sessionRestore,
   };
 }
 

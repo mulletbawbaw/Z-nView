@@ -29,6 +29,8 @@ function registerUiIpcHandlers(context) {
     dl,
     sendToDownloader,
     app,
+    sessionRestore,
+    tabShell,
   } = context;
 
   const openComicDirs = new Set();
@@ -36,6 +38,8 @@ function registerUiIpcHandlers(context) {
   const pendingReaderOpenDirs = [];
   const pendingReaderOpenDirSet = new Set();
   let pendingReaderFocusDir = "";
+  /** @type {Record<string, number>} */
+  let pendingReaderPageIndexByDir = {};
   let readerOpenFlushScheduled = false;
 
   function broadcastOpenComics() {
@@ -89,7 +93,11 @@ function registerUiIpcHandlers(context) {
     pendingReaderOpenDirSet.clear();
     const focusComicDir = pendingReaderFocusDir;
     pendingReaderFocusDir = "";
-    sendToReader("reader:openComicsBatch", { comicDirs, focusComicDir });
+    const pageIndexByDir = pendingReaderPageIndexByDir;
+    pendingReaderPageIndexByDir = {};
+    sendToReader("reader:openComicsBatch", Object.keys(pageIndexByDir).length
+      ? { comicDirs, focusComicDir, pageIndexByDir }
+      : { comicDirs, focusComicDir });
   }
 
   function scheduleFlushPendingReaderOpens() {
@@ -98,7 +106,7 @@ function registerUiIpcHandlers(context) {
     queueMicrotask(flushPendingReaderOpens);
   }
 
-  function queueReaderOpenDirs(readerWindow, comicDirs, focusComicDir = "") {
+  function queueReaderOpenDirs(readerWindow, comicDirs, focusComicDir = "", pageIndexByDir = {}) {
     const normalizedDirs = Array.isArray(comicDirs)
       ? comicDirs.map((value) => String(value || "").trim()).filter(Boolean)
       : [];
@@ -109,6 +117,8 @@ function registerUiIpcHandlers(context) {
       pendingReaderFocusDir = normalizedDirs[normalizedDirs.length - 1];
     }
     for (const comicDir of normalizedDirs) {
+      const pageIndex = Number(pageIndexByDir?.[comicDir]);
+      if (Number.isInteger(pageIndex) && pageIndex > 0) pendingReaderPageIndexByDir[comicDir] = pageIndex;
       if (!pendingReaderOpenDirSet.has(comicDir)) {
         pendingReaderOpenDirSet.add(comicDir);
         pendingReaderOpenDirs.push(comicDir);
@@ -157,6 +167,7 @@ function registerUiIpcHandlers(context) {
         pendingReaderOpenDirs.splice(0, pendingReaderOpenDirs.length);
         pendingReaderOpenDirSet.clear();
         pendingReaderFocusDir = "";
+        pendingReaderPageIndexByDir = {};
         readerOpenFlushScheduled = false;
         openComicDirs.clear();
         broadcastOpenComics();
@@ -170,7 +181,11 @@ function registerUiIpcHandlers(context) {
 
     return { ok: true };
   }
-  function openReaderWindowForComics(comicDirs) {
+  /**
+   * @param {unknown} comicDirs
+   * @param {{ focusComicDir?: string, pageIndexByDir?: Record<string, number> }} [options]
+   */
+  function openReaderWindowForComics(comicDirs, options = {}) {
     const normalizedDirs = Array.from(new Set(
       (Array.isArray(comicDirs) ? comicDirs : [])
         .map((value) => String(value || "").trim())
@@ -201,6 +216,7 @@ function registerUiIpcHandlers(context) {
         pendingReaderOpenDirs.splice(0, pendingReaderOpenDirs.length);
         pendingReaderOpenDirSet.clear();
         pendingReaderFocusDir = "";
+        pendingReaderPageIndexByDir = {};
         readerOpenFlushScheduled = false;
         openComicDirs.clear();
         broadcastOpenComics();
@@ -216,10 +232,13 @@ function registerUiIpcHandlers(context) {
     }
     broadcastOpenComics();
 
-    const focusComicDir = newlyAddedDirs.length
-      ? newlyAddedDirs[newlyAddedDirs.length - 1]
-      : normalizedDirs[normalizedDirs.length - 1];
-    queueReaderOpenDirs(readerWindow, normalizedDirs, focusComicDir);
+    const requestedFocusDir = String(options.focusComicDir || "").trim();
+    const focusComicDir = normalizedDirs.includes(requestedFocusDir)
+      ? requestedFocusDir
+      : newlyAddedDirs.length
+        ? newlyAddedDirs[newlyAddedDirs.length - 1]
+        : normalizedDirs[normalizedDirs.length - 1];
+    queueReaderOpenDirs(readerWindow, normalizedDirs, focusComicDir, options.pageIndexByDir);
 
     return { ok: true, opened: normalizedDirs.length };
   }
@@ -323,6 +342,14 @@ function registerUiIpcHandlers(context) {
 
   ipcMain.handle("ui:openReaderBatch", async (_e, comicDirs) => openReaderWindowForComics(comicDirs));
 
+  if (typeof sessionRestore?.setRestorer === "function") sessionRestore.setRestorer((plan) => {
+    const res = openReaderWindowForComics(plan.comicDirs, {
+      focusComicDir: plan.focusComicDir,
+      pageIndexByDir: plan.pageIndexByDir,
+    });
+    if (res?.ok && plan.activeTab !== "reader") tabShell?.activateTab("gallery");
+  });
+
   ipcMain.handle("ui:readerOpenGroupBatch", async (_event, payload) => {
     const validated = validateAndNormalizeReaderOpenGroupBatchRequest(payload);
     if (!validated.ok) {
@@ -400,14 +427,16 @@ function registerUiIpcHandlers(context) {
     return openReaderWindowForComic(comicDir);
   });
 
-  ipcMain.handle("ui:syncOpenComics", async (_e, comicDirs) => {
-    const nextDirs = Array.isArray(comicDirs) ? comicDirs : [];
+  // Accepts the legacy list of directories or `{ comics: [{ comicDir, pageIndex }], activeComicDir }`.
+  ipcMain.handle("ui:syncOpenComics", async (_e, payload) => {
+    const entries = Array.isArray(payload) ? payload : (Array.isArray(payload?.comics) ? payload.comics : []);
     openComicDirs.clear();
-    for (const comicDir of nextDirs) {
-      const normalized = String(comicDir || "").trim();
+    for (const entry of entries.slice(0, 500)) {
+      const normalized = String((typeof entry === "string" ? entry : entry?.comicDir) || "").trim();
       if (normalized) openComicDirs.add(normalized);
     }
     broadcastOpenComics();
+    if (typeof sessionRestore?.record === "function") sessionRestore.record(payload);
     return { ok: true, count: openComicDirs.size };
   });
 

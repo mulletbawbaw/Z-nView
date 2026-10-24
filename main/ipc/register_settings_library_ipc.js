@@ -271,6 +271,14 @@ ipcMain.handle("settings:update", async (_e, payload) => {
   delete partial.moveLibraryContent;
 
   const currentSettings = settingsManager.getSettings();
+  if (Object.prototype.hasOwnProperty.call(partial, "session")) {
+    // Renderers only own the toggle; the open-tab list is written by main (session_restore.js).
+    const restoreTabs = partial.session?.restoreTabs;
+    partial.session = {
+      ...currentSettings.session,
+      restoreTabs: typeof restoreTabs === "boolean" ? restoreTabs : currentSettings.session?.restoreTabs !== false,
+    };
+  }
   const requestedLibraryPath = Object.prototype.hasOwnProperty.call(partial, "libraryPath")
     ? partial.libraryPath
     : currentSettings.libraryPath;

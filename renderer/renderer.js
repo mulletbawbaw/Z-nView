@@ -108,6 +108,7 @@ const closeSettingsBtn = $("closeSettings");
 const saveSettingsBtn = $("saveSettings");
 const settingsStartPagesListEl = $("settingsStartPagesList");
 const settingsBlockPopupsInput = $("settingsBlockPopups");
+const settingsRestoreTabsInput = $("settingsRestoreTabs");
 const settingsAllowListEnabledInput = $("settingsAllowListEnabled");
 const settingsDarkModeInput = $("settingsDarkMode");
 const settingsDefaultSortInput = $("settingsDefaultSort");
@@ -2369,6 +2370,9 @@ function applySettingsToUI(nextSettings) {
   settingsCache.startPage = startPages[0] || "";
   renderStartPageRows(sourceAdapterUrls);
   settingsBlockPopupsInput.checked = Boolean(settingsCache.blockPopups);
+  if (settingsRestoreTabsInput) {
+    settingsRestoreTabsInput.checked = settingsCache.session?.restoreTabs !== false;
+  }
   if (settingsAllowListEnabledInput) {
     settingsAllowListEnabledInput.checked = Boolean(settingsCache.allowListEnabled);
   }
@@ -3701,6 +3705,7 @@ saveSettingsBtn.addEventListener("click", async () => {
     defaultSort: settingsDefaultSortInput?.value || settingsCache.defaultSort,
     cardSize: settingsCardSizeInput?.value || settingsCache.cardSize,
     libraryPath: settingsCache.libraryPath || "",
+    session: { restoreTabs: settingsRestoreTabsInput?.checked ?? true },
   };
   const res = await window.api.updateSettings(payload);
   if (res?.ok) {

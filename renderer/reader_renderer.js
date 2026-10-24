@@ -1065,6 +1065,7 @@ function captureSessionState(sessionId) {
   const maxIndex = Math.max(0, (readerPageController.getPageCount?.() || 1) - 1);
   session.selectedPageIndex = Math.max(0, Math.min(pageIndex, maxIndex));
   session.lastOpenedAt = Date.now();
+  scheduleSyncOpenComicDirs();
 }
 
 function captureActiveSessionState() {
@@ -1154,11 +1155,29 @@ function closeReaderWindow() {
   window.close();
 }
 
+// Main uses the pages and the active comic to reopen these tabs on the next start (main/session_restore.js).
 async function syncOpenComicDirs() {
   const syncFn = window.readerApi?.syncOpenComics;
   if (!syncFn) return;
-  const dirs = readManagerState.sessions.map((session) => session?.comicDir).filter(Boolean);
-  await syncFn(dirs);
+  if (syncOpenComicsTimer) {
+    clearTimeout(syncOpenComicsTimer);
+    syncOpenComicsTimer = null;
+  }
+  await syncFn({
+    comics: readManagerState.sessions
+      .filter((session) => session?.comicDir)
+      .map((session) => ({ comicDir: session.comicDir, pageIndex: Number(session.selectedPageIndex) || 0 })),
+    activeComicDir: getActiveSession()?.comicDir || "",
+  });
+}
+
+let syncOpenComicsTimer = null;
+function scheduleSyncOpenComicDirs() {
+  if (syncOpenComicsTimer) return;
+  syncOpenComicsTimer = setTimeout(() => {
+    syncOpenComicsTimer = null;
+    void syncOpenComicDirs();
+  }, 1000);
 }
 
 const readerRuntime = window.nviewReaderRuntime?.createReaderRuntime?.({
@@ -1725,7 +1744,13 @@ async function openComicByDir(comicDir) {
   await syncOpenComicDirs();
 }
 
-async function openComicsBatchByDir(comicDirs, focusComicDir = "") {
+function resolveRestoredPageIndex(value, pages) {
+  const pageIndex = Number(value);
+  const maxIndex = Math.max(0, (Array.isArray(pages) ? pages.length : 0) - 1);
+  return Number.isInteger(pageIndex) && pageIndex > 0 ? Math.min(pageIndex, maxIndex) : 0;
+}
+
+async function openComicsBatchByDir(comicDirs, focusComicDir = "", pageIndexByDir = {}) {
   const normalizedDirs = normalizeBatchComicDirs(comicDirs);
   if (!normalizedDirs.length) return;
 
@@ -1748,7 +1773,7 @@ async function openComicsBatchByDir(comicDirs, focusComicDir = "") {
       title: response.comic?.title || "Reader",
       comicMeta: response.comic || null,
       pages: Array.isArray(response.pages) ? response.pages : [],
-      selectedPageIndex: 0,
+      selectedPageIndex: resolveRestoredPageIndex(pageIndexByDir?.[comicDir], response.pages),
       lastOpenedAt: Date.now(),
     });
   }
@@ -1922,10 +1947,10 @@ function enqueueOpenComicByDir(comicDir) {
   return openComicQueue;
 }
 
-function enqueueOpenComicsBatchByDir(comicDirs, focusComicDir = "") {
+function enqueueOpenComicsBatchByDir(comicDirs, focusComicDir = "", pageIndexByDir = {}) {
   openComicQueue = openComicQueue
     .catch(() => {})
-    .then(() => openComicsBatchByDir(comicDirs, focusComicDir));
+    .then(() => openComicsBatchByDir(comicDirs, focusComicDir, pageIndexByDir));
   return openComicQueue;
 }
 
@@ -2005,8 +2030,8 @@ window.readerApi.onOpenComic?.(({ comicDir }) => {
   void enqueueOpenComicByDir(comicDir);
 });
 
-window.readerApi.onOpenComicsBatch?.(({ comicDirs, focusComicDir }) => {
-  void enqueueOpenComicsBatchByDir(comicDirs, focusComicDir);
+window.readerApi.onOpenComicsBatch?.(({ comicDirs, focusComicDir, pageIndexByDir }) => {
+  void enqueueOpenComicsBatchByDir(comicDirs, focusComicDir, pageIndexByDir);
 });
 
 window.readerApi.onOpenGroupBatch?.((payload) => {

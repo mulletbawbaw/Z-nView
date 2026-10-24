@@ -2,6 +2,7 @@ const { resolveSourceAdapterForStartPage, listSourceAdapterSlots } = require("..
 const fs = require("fs");
 const path = require("path");
 const { nativeTheme } = require("electron");
+const { COMIC_ID_PATTERN, SESSION_OPEN_COMICS_MAX } = require("./session_restore");
 
 function createSettingsManager({
   settingsFile,
@@ -311,6 +312,30 @@ function createSettingsManager({
     };
   }
 
+  // Tabs reopened after unlock: comic folder ids (never paths) with the page each one was on.
+  function normalizeSessionSettings(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const defaults = defaultSettings?.session || {};
+    const restoreTabs = Boolean(source.restoreTabs ?? defaults.restoreTabs ?? true);
+    const openComics = [];
+    const seen = new Set();
+    for (const entry of restoreTabs && Array.isArray(source.openComics) ? source.openComics : []) {
+      const id = String(entry?.id || "").trim();
+      if (!COMIC_ID_PATTERN.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      const page = Number(entry?.page);
+      openComics.push({ id, page: Number.isInteger(page) && page > 0 ? page : 0 });
+      if (openComics.length >= SESSION_OPEN_COMICS_MAX) break;
+    }
+    const activeComicId = String(source.activeComicId || "").trim();
+    return {
+      restoreTabs,
+      openComics,
+      activeComicId: seen.has(activeComicId) ? activeComicId : "",
+      activeTab: source.activeTab === "reader" && openComics.length ? "reader" : "gallery",
+    };
+  }
+
   function normalizeBasicSettings(value) {
     const source = value && typeof value === "object" ? value : {};
     return {
@@ -528,6 +553,7 @@ function createSettingsManager({
       groups: normalizeGroupsSettings(raw.groups ?? defaultSettings.groups),
       ui: normalizeUiSettings(raw.ui ?? defaultSettings.ui),
       tagManager: normalizeTagManagerSettings(raw.tagManager ?? defaultSettings.tagManager),
+      session: normalizeSessionSettings(raw.session ?? defaultSettings.session),
     };
     if (!settingsCache.startPages.length) {
       settingsCache.startPages = Object.values(settingsCache.sourceAdapterUrls).filter(Boolean);
@@ -569,6 +595,7 @@ function createSettingsManager({
       groups: normalizeGroupsSettings(next.groups),
       ui: normalizeUiSettings(next.ui),
       tagManager: normalizeTagManagerSettings(next.tagManager),
+      session: normalizeSessionSettings(next.session),
     };
     if (!settingsCache.startPages.length) {
       settingsCache.startPages = Object.values(settingsCache.sourceAdapterUrls).filter(Boolean);
