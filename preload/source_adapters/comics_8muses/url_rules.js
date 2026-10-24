@@ -3,10 +3,11 @@ const { normalizeHttpUrl, matchesUrlHashes } = require("../url_identity");
 
 const DIRECT_DOWNLOAD_RULES = Object.freeze({
   originHashes: Object.freeze(["2cb215b1d4043e4a608e4f690cd7952fea9ac43d154d496f054eb777e47e3c2e"]),
-  pathPatterns: Object.freeze(["/comics/album/*", "/comics/album/*/*"]),
+  pathPatterns: Object.freeze(["/comics/album/*", "/comics/album/*/*", "/porn/album/*", "/porn/album/*/*"]),
 });
 
-const MUSES_GALLERY_PATH_REGEX = /^\/comics\/album\/[^/?#]+(?:\/[^/?#]+){1,2}\/?$/iu;
+// The site moved albums from /comics/album/ to /porn/album/ (old links redirect); both stay accepted.
+const MUSES_GALLERY_PATH_REGEX = /^\/(?:comics|porn)\/album\/[^/?#]+(?:\/[^/?#]+){1,2}\/?$/iu;
 
 function parseUrl(value) {
   return normalizeHttpUrl(value);

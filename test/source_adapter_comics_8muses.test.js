@@ -14,13 +14,17 @@ function makeElement({ text = "", attrs = {}, dataset = {} } = {}) {
   };
 }
 
-test("comics_8muses adapter matches /comics/album/* and /comics/album/*/* URL shapes", () => {
+test("comics_8muses adapter matches /comics/album/ and /porn/album/ URL shapes", () => {
   assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/"), false);
   assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/comics/album/artist"), false);
   assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/comics/album/artist/comic"), true);
   assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/comics/album/artist/comic/Issue-3"), true);
   assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/comics/album/artist/comic/Issue-3/extra"), false);
   assert.equal(comics8musesSourceAdapter.matchesUrl("https://example.com/comics/album/artist/comic/Issue-3"), false);
+  assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/porn/album/artist"), false);
+  assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/porn/album/artist/comic"), true);
+  assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/porn/album/artist/comic/Issue-3"), true);
+  assert.equal(comics8musesSourceAdapter.matchesUrl("https://comics.8muses.com/porn/album/artist/comic/Issue-3/extra"), false);
 });
 
 test("comics_8muses metadata extractor returns title and artist from breadcrumb", () => {
@@ -30,7 +34,7 @@ test("comics_8muses metadata extractor returns title and artist from breadcrumb"
       return null;
     },
     querySelectorAll(selector) {
-      if (selector === '.top-menu-breadcrumb ol li a[href^="/comics/album/"]') {
+      if (selector === '.top-menu-breadcrumb ol li a[href^="/comics/album/"], .top-menu-breadcrumb ol li a[href^="/porn/album/"]') {
         return [
           makeElement({ text: "Artist Name", attrs: { href: "/comics/album/artist-name" } }),
           makeElement({ text: "Comic Title", attrs: { href: "/comics/album/artist-name/comic-title" } }),
@@ -77,4 +81,13 @@ test("comics_8muses page image extractor upgrades /image/th/ to /image/fm/ and d
     "https://comics.8muses.com/image/fm/abc.jpg",
     "https://comics.8muses.com/image/fm/def.jpg",
   ]);
+});
+
+test("comics_8muses keeps gallery ids from /porn/album/ paths equal to the old /comics/album/ ids", () => {
+  const documentRef = { querySelector: () => null, querySelectorAll: () => [] };
+  const meta = comics8musesSourceAdapter.extractMetadata(documentRef, {
+    href: "https://comics.8muses.com/porn/album/artist-name/comic-title/Issue-3",
+    pathname: "/porn/album/artist-name/comic-title/Issue-3",
+  });
+  assert.equal(meta.galleryId, "comics/album/artist-name/comic-title/Issue-3");
 });

@@ -10,11 +10,14 @@ function normalizeList(items) {
 function extractGalleryId(_documentRef, locationRef) {
   const pathname = String(locationRef?.pathname || "").trim();
   if (!pathname) return "";
-  return pathname.replace(/^\/+|\/+$/g, "");
+  // Keep ids from the /porn/album/ paths equal to the ones saved under the old /comics/album/ paths.
+  return pathname.replace(/^\/+|\/+$/g, "").replace(/^porn\/album\//i, "comics/album/");
 }
 
 function extractArtist(documentRef) {
-  const links = Array.from(documentRef.querySelectorAll('.top-menu-breadcrumb ol li a[href^="/comics/album/"]'));
+  const links = Array.from(documentRef.querySelectorAll(
+    '.top-menu-breadcrumb ol li a[href^="/comics/album/"], .top-menu-breadcrumb ol li a[href^="/porn/album/"]',
+  ));
   if (!links.length) return null;
   return textContent(links[0]) || null;
 }

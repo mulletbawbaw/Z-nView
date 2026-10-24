@@ -153,3 +153,102 @@ test('3hentai metadata classifies tag links by path segment', () => {
   assert.equal(meta.artist, 'someone');
   assert.equal(meta.pages, 67);
 });
+
+test('imhentai_xxx uses g_th extensions instead of the .jpg thumbnail extension', () => {
+  const { imhentaiXxxSourceAdapter } = require('../preload/source_adapters/imhentai_xxx');
+  const documentRef = makeDocument({
+    thumbSelector: '#append_thumbs .gthumb img',
+    thumbs: ['https://m11.imhentai.xxx/033/az68dosp2y/1t.jpg', 'https://m11.imhentai.xxx/033/az68dosp2y/2t.jpg'],
+    hiddenInputs: { load_pages: '3' },
+    scripts: ['g_th = $.parseJSON(\'{"1":"w,1280,1870","2":"j,1280,1868","3":"p,1280,1871"}\');'],
+  });
+  const urls = imhentaiXxxSourceAdapter.extractPageImageUrls(documentRef, { href: 'https://imhentai.xxx/gallery/1762858/' });
+  assert.deepEqual(urls, [
+    'https://m11.imhentai.xxx/033/az68dosp2y/1.webp',
+    'https://m11.imhentai.xxx/033/az68dosp2y/2.jpg',
+    'https://m11.imhentai.xxx/033/az68dosp2y/3.png',
+  ]);
+});
+
+function makeNode({ attrs = {}, text = '', children = {} } = {}) {
+  return {
+    textContent: text,
+    getAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null;
+    },
+    querySelector(selector) {
+      return (children[selector] || [])[0] || null;
+    },
+    querySelectorAll(selector) {
+      return children[selector] || [];
+    },
+  };
+}
+
+test('hentairox redesign builds every page from the reader page JSON extensions', async () => {
+  const grid = makeNode({
+    attrs: { 'data-gallery-id': '864399', 'data-total-pages': '3' },
+    children: { img: [makeNode({ attrs: { src: 'https://m11.hentairox.com/033/wzyps67ga9/1t.jpg' } })] },
+  });
+  const documentRef = makeNode({ children: { '#js-thumbs-grid': [grid] } });
+  const readerDocument = makeNode({
+    children: {
+      '#readerApp': [makeNode({ attrs: { 'data-reader-image-base': 'https://m11.hentairox.com/033/wzyps67ga9' } })],
+      '#readerPagesJson': [makeNode({ text: '[{"page":1,"ext":"jpg"},{"page":2,"ext":"webp"}]' })],
+    },
+  });
+  const requested = [];
+  const urls = await hentairoxSourceAdapter.extractPageImageUrls(
+    documentRef,
+    { href: 'https://hentairox.com/gallery/864399/' },
+    {
+      fetchImpl: async (url) => {
+        requested.push(url);
+        return { ok: true, text: async () => 'reader-html' };
+      },
+      domParserFactory: () => readerDocument,
+    },
+  );
+  assert.deepEqual(requested, ['https://hentairox.com/g/864399/1/']);
+  assert.deepEqual(urls, [
+    'https://m11.hentairox.com/033/wzyps67ga9/1.jpg',
+    'https://m11.hentairox.com/033/wzyps67ga9/2.webp',
+    'https://m11.hentairox.com/033/wzyps67ga9/3.webp',
+  ]);
+});
+
+test('hentairox redesign falls back to the thumbnail directory and webp when the reader fetch fails', async () => {
+  const grid = makeNode({
+    attrs: { 'data-gallery-id': '1', 'data-total-pages': '2' },
+    children: { img: [makeNode({ attrs: { src: 'https://m11.hentairox.com/033/abc/1t.jpg' } })] },
+  });
+  const urls = await hentairoxSourceAdapter.extractPageImageUrls(
+    makeNode({ children: { '#js-thumbs-grid': [grid] } }),
+    { href: 'https://hentairox.com/gallery/1/' },
+    { fetchImpl: async () => { throw new Error('offline'); } },
+  );
+  assert.deepEqual(urls, ['https://m11.hentairox.com/033/abc/1.webp', 'https://m11.hentairox.com/033/abc/2.webp']);
+});
+
+test('hentairox redesign metadata reads entity groups and the page count', () => {
+  const group = (label, names) => makeNode({
+    children: {
+      '.hr-gallery-entity-label': [makeNode({ text: label })],
+      '.hr-gallery-tag__name': names.map((name) => makeNode({ text: name })),
+    },
+  });
+  const documentRef = makeNode({
+    children: {
+      '.hr-gallery-entity-group': [group('Tags:', ['maid', 'comic']), group('Artists:', ['muhny']), group('Languages:', ['english'])],
+      '#gallery-title': [makeNode({ text: 'A Title' })],
+      '#js-thumbs-grid': [makeNode({ attrs: { 'data-total-pages': '2' } })],
+    },
+  });
+  const meta = hentairoxSourceAdapter.extractMetadata(documentRef, { href: 'https://hentairox.com/gallery/866313/', pathname: '/gallery/866313/' });
+  assert.equal(meta.comicName, 'A Title');
+  assert.equal(meta.artist, 'muhny');
+  assert.deepEqual(meta.tags, ['maid', 'comic']);
+  assert.deepEqual(meta.languages, ['english']);
+  assert.equal(meta.pages, 2);
+  assert.equal(meta.galleryId, '866313');
+});
