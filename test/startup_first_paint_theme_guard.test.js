@@ -12,16 +12,25 @@ const WINDOW_HTML_FILES = [
   'group_manager.html',
   'tag_manager.html',
   'reader.html',
+  'shell.html',
 ];
 
 test('window HTML bootstraps theme class from trusted bootstrapTheme query before renderer hydration', () => {
+  const bootstrapSource = fs.readFileSync(path.join(process.cwd(), 'windows', 'bootstrap_theme.js'), 'utf8');
+  assert.match(bootstrapSource, /new URLSearchParams\(window\.location\.search\)/, 'bootstrap_theme.js: reads search params');
+  assert.match(bootstrapSource, /params\.get\("bootstrapTheme"\) === "dark"/, 'bootstrap_theme.js: only dark token enables dark bootstrap');
+  assert.match(bootstrapSource, /document\.documentElement\.classList\.add\("bootstrap-dark"\)/, 'bootstrap_theme.js: sets bootstrap class on html element');
+
   for (const fileName of WINDOW_HTML_FILES) {
     const filePath = path.join(process.cwd(), 'windows', fileName);
     const source = fs.readFileSync(filePath, 'utf8');
+    const head = source.slice(0, source.indexOf('</head>'));
 
-    assert.match(source, /new URLSearchParams\(window\.location\.search\)/, `${fileName}: reads search params`);
-    assert.match(source, /params\.get\("bootstrapTheme"\) === "dark"/, `${fileName}: only dark token enables dark bootstrap`);
-    assert.match(source, /document\.documentElement\.classList\.add\("bootstrap-dark"\)/, `${fileName}: sets bootstrap class on html element`);
+    assert.match(head, /<script src="\.\/bootstrap_theme\.js"><\/script>/, `${fileName}: loads bootstrap_theme.js in head`);
+    assert.ok(
+      head.indexOf('bootstrap_theme.js') === head.search(/<script\b/) + '<script src="./'.length,
+      `${fileName}: bootstrap_theme.js is the first script`,
+    );
   }
 });
 

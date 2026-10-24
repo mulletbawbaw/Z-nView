@@ -65,7 +65,7 @@ test("browser_view preload bundle includes and uses resolveSourceAdapter", () =>
 test("electron-builder packaging config includes and validates preload bundles", () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   assert.equal(packageJson.scripts["build:win"], "npm run build:preload && electron-builder --win");
-  assert.equal(packageJson.scripts["package:smoke"], "electron-builder --dir -c.asar=false -c.directories.output=dist-smoke");
+  assert.equal(packageJson.scripts["package:smoke"], "electron-builder --dir -c.asar=false -c.directories.output=dist-smoke -c.win.signAndEditExecutable=false");
   assert.equal(packageJson.scripts["verify:packaged-artifacts"], "node scripts/verify-packaged-artifacts.js dist-smoke");
   assert.equal(packageJson.build.beforePack, "scripts/verify-preload-dist.js");
   assert.match(packageJson.build.files.join("\n"), /preload-dist\/\*\*\/\*/);
